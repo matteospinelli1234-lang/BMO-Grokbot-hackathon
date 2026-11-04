@@ -78,6 +78,7 @@ def drone_mesh(drone: Drone) -> list[Segment3]:
     c, sn = math.cos(yaw), math.sin(yaw)
     ox, oy, oz = s["x"], s["y"], s["z"]
     prop = math.radians(s["prop_angle"])
+    safe_r = float(getattr(drone, "collision_radius", 0.20))
 
     def xf(lx: float, ly: float, lz: float) -> Vec3:
         wx = ox + lx * c + ly * sn
@@ -115,6 +116,28 @@ def drone_mesh(drone: Drone) -> list[Segment3]:
         segs.append(Segment3(xf(0.06, -0.06, 0.0), xf(0.06, -0.06, 0.02), arm, 1))
         segs.append(Segment3(xf(-0.06, 0.06, 0.0), xf(-0.06, 0.06, 0.02), arm, 1))
         segs.append(Segment3(xf(0.06, 0.06, 0.0), xf(0.06, 0.06, 0.02), arm, 1))
+
+    # Keep-out / death-zone bubble (horizontal ring + vertical meridians)
+    if s["flying"] or s.get("collided"):
+        bubble = (255, 90, 70) if s.get("collided") else (255, 170, 60)
+        n = 16
+        ring: list[Vec3] = []
+        for i in range(n):
+            a = 2.0 * math.pi * i / n
+            ring.append((ox + safe_r * math.cos(a), oy + safe_r * math.sin(a), oz))
+        for i in range(n):
+            segs.append(Segment3(ring[i], ring[(i + 1) % n], bubble, 1))
+        # Two vertical circles (XZ / YZ) so the sphere reads in 3D
+        for axis in ("x", "y"):
+            arc: list[Vec3] = []
+            for i in range(n):
+                a = 2.0 * math.pi * i / n
+                if axis == "x":
+                    arc.append((ox + safe_r * math.cos(a), oy, oz + safe_r * math.sin(a)))
+                else:
+                    arc.append((ox, oy + safe_r * math.cos(a), oz + safe_r * math.sin(a)))
+            for i in range(n):
+                segs.append(Segment3(arc[i], arc[(i + 1) % n], bubble, 1))
 
     return segs
 
@@ -334,11 +357,12 @@ class Renderer:
             status = "GROUNDED"
         current = zone_at(s["x"], s["y"], s["z"], self.zones)
         zone_txt = current.id if current else "—"
+        safe_cm = int(round(float(getattr(drone, "collision_radius", 0.20)) * 100))
         lines = [
             f"{status}  |  bat {s['battery']:.0f}%  |  map {self.room.source}",
             f"zone {zone_txt}   zones {'ON' if self.show_zones else 'OFF'} ({len(self.zones)})",
             f"pos  x={s['x']:+.2f}  y={s['y']:+.2f}  z={s['z']:.2f} m",
-            f"yaw  {s['yaw']:5.1f}°   height {int(s['z'] * 100)} cm",
+            f"yaw  {s['yaw']:5.1f}°   height {int(s['z'] * 100)} cm   safe {safe_cm} cm",
             f"cam  {'orbit' if self.orbit_mode else 'chase'}   {fps:.0f} FPS",
         ]
         y = 12

@@ -18,7 +18,11 @@ DEFAULT_ZONES_PATH = Path(__file__).resolve().parents[1] / "zones.json"
 
 @dataclass(frozen=True)
 class Zone:
-    """Axis-aligned flight chunk with a preferred hover point."""
+    """Axis-aligned flight chunk with a preferred hover point.
+
+    ``origin`` (HUB) is the sim spawn / takeoff-pad point — editable in the
+    zone editor independently of ``hover``.
+    """
 
     id: str
     label: str
@@ -31,6 +35,7 @@ class Zone:
     color: Color
     priority: int = 0  # higher wins when volumes overlap
     hover: tuple[float, float, float] | None = None
+    origin: tuple[float, float, float] | None = None
 
     def contains(self, x: float, y: float, z: float, pad: float = 0.0) -> bool:
         return (
@@ -61,6 +66,55 @@ class Zone:
         hz = min(max(0.9, self.zmin + 0.9), self.zmax - 0.2)
         return (cx, cy, hz)
 
+    @property
+    def origin_point(self) -> tuple[float, float, float] | None:
+        if self.origin is not None:
+            return self.origin
+        return None
+
+
+def default_hub_zone() -> Zone:
+    """Sim spawn zone — origin marks where the drone starts on the floor."""
+    return Zone(
+        id="HUB",
+        label="HUB",
+        xmin=-1.2,
+        xmax=1.2,
+        ymin=-1.2,
+        ymax=1.2,
+        zmin=0.0,
+        zmax=2.0,
+        color=(50, 220, 160),
+        priority=80,
+        hover=(0.0, 0.0, 0.9),
+        origin=(0.0, 0.0, 0.0),
+    )
+
+
+def spawn_pose(zones: Sequence[Zone] | None = None) -> tuple[float, float, float]:
+    """World-frame spawn (metres) from the HUB origin point."""
+    zs = list(zones) if zones is not None else build_pad2_zones()
+    for z in zs:
+        if z.id.upper() == "HUB":
+            if z.origin is not None:
+                return z.origin
+            hx, hy, _ = z.hover_point
+            return (hx, hy, max(0.0, z.zmin))
+    return (0.0, 0.0, 0.0)
+
+
+def ensure_hub(zones: Sequence[Zone]) -> list[Zone]:
+    """Guarantee a HUB zone with an origin point exists (migrate older catalogs)."""
+    out = list(zones)
+    for i, z in enumerate(out):
+        if z.id.upper() != "HUB":
+            continue
+        if z.origin is None:
+            hx, hy, _ = z.hover_point
+            out[i] = replace(z, origin=(hx, hy, max(0.0, z.zmin)))
+        return out
+    return [default_hub_zone(), *out]
+
 
 def _solid_by_name(step: StepMap, name: str):
     for s in step.solids:
@@ -80,7 +134,10 @@ def default_pad2_zones(step: StepMap | None = None) -> list[Zone]:
 
     zones: list[Zone] = []
 
-    # 1) Takeoff pad — open center
+    # 0) Sim spawn / takeoff hub (editable origin in the zone editor)
+    zones.append(default_hub_zone())
+
+    # 1) Takeoff pad — open center (legacy nav area around the hub)
     zones.append(
         Zone(
             id="PAD",
@@ -266,11 +323,18 @@ def zone_to_dict(zone: Zone) -> dict:
     data["color"] = list(zone.color)
     if zone.hover is not None:
         data["hover"] = list(zone.hover)
+    else:
+        data.pop("hover", None)
+    if zone.origin is not None:
+        data["origin"] = list(zone.origin)
+    else:
+        data.pop("origin", None)
     return data
 
 
 def zone_from_dict(data: dict) -> Zone:
     hover = data.get("hover")
+    origin = data.get("origin")
     return Zone(
         id=str(data["id"]),
         label=str(data.get("label", data["id"])),
@@ -283,6 +347,7 @@ def zone_from_dict(data: dict) -> Zone:
         color=tuple(int(c) for c in data.get("color", (120, 120, 120))),  # type: ignore[arg-type]
         priority=int(data.get("priority", 0)),
         hover=tuple(float(v) for v in hover) if hover is not None else None,  # type: ignore[arg-type]
+        origin=tuple(float(v) for v in origin) if origin is not None else None,  # type: ignore[arg-type]
     )
 
 
@@ -291,7 +356,7 @@ def save_zones(zones: Sequence[Zone], path: Path | str | None = None) -> Path:
     out = Path(path) if path else DEFAULT_ZONES_PATH
     payload = {
         "version": 1,
-        "zones": [zone_to_dict(z) for z in zones],
+        "zones": [zone_to_dict(z) for z in ensure_hub(zones)],
     }
     out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return out
@@ -303,7 +368,7 @@ def load_zones(path: Path | str | None = None) -> list[Zone] | None:
     if not src.is_file():
         return None
     payload = json.loads(src.read_text(encoding="utf-8"))
-    return [zone_from_dict(z) for z in payload.get("zones", [])]
+    return ensure_hub([zone_from_dict(z) for z in payload.get("zones", [])])
 
 
 def build_pad2_zones(
@@ -314,7 +379,7 @@ def build_pad2_zones(
     loaded = load_zones(path)
     if loaded:
         return loaded
-    return default_pad2_zones(step)
+    return ensure_hub(default_pad2_zones(step))
 
 
 def update_zone_bounds(
@@ -328,7 +393,7 @@ def update_zone_bounds(
     zmax: float | None = None,
     clamp_hover: bool = True,
 ) -> Zone:
-    """Return a copy with updated AABB; optionally keep hover inside the box."""
+    """Return a copy with updated AABB; optionally keep hover/origin inside the box."""
     x0 = zone.xmin if xmin is None else xmin
     x1 = zone.xmax if xmax is None else xmax
     y0 = zone.ymin if ymin is None else ymin
@@ -342,6 +407,7 @@ def update_zone_bounds(
     if z0 > z1:
         z0, z1 = z1, z0
     hover = zone.hover
+    origin = zone.origin
     if clamp_hover:
         hx = 0.5 * (x0 + x1)
         hy = 0.5 * (y0 + y1)
@@ -350,6 +416,11 @@ def update_zone_bounds(
             hx = min(max(hover[0], x0 + 0.05), x1 - 0.05)
             hy = min(max(hover[1], y0 + 0.05), y1 - 0.05)
         hover = (hx, hy, hz)
+        if origin is not None:
+            ox = min(max(origin[0], x0 + 0.05), x1 - 0.05)
+            oy = min(max(origin[1], y0 + 0.05), y1 - 0.05)
+            oz = min(max(origin[2], z0), z1)
+            origin = (ox, oy, oz)
     return replace(
         zone,
         xmin=x0,
@@ -359,6 +430,7 @@ def update_zone_bounds(
         zmin=z0,
         zmax=z1,
         hover=hover,
+        origin=origin,
     )
 
 

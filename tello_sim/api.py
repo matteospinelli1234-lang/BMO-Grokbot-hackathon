@@ -13,8 +13,10 @@ from tello_sim.app import (
     get_shared_drone,
     start_app_background,
     start_physics_background,
+    stop_app,
 )
 from tello_sim.drone import Drone
+from tello_sim.zones import build_pad2_zones, spawn_pose
 
 
 class FrameReader:
@@ -54,9 +56,10 @@ class SimulatedTello:
         self._frame_reader = FrameReader(self.drone)
 
     def connect(self) -> str:
-        # Reset to takeoff pad so leftover state from prior runs cannot poison scripts
+        # Reset to HUB.origin (editable in zone_editor) so scripts start on the pad
         d = self.drone
-        d.x = d.y = d.z = 0.0
+        ox, oy, oz = spawn_pose(build_pad2_zones())
+        d.x, d.y, d.z = float(ox), float(oy), float(oz)
         d.yaw = 0.0
         d.vx = d.vy = d.vz = 0.0
         d.flying = False
@@ -79,6 +82,8 @@ class SimulatedTello:
     def end(self) -> None:
         self._connected = False
         self.drone.set_rc(0, 0, 0, 0)
+        if self._visual:
+            stop_app()
 
     def takeoff(self) -> str:
         self._ensure()

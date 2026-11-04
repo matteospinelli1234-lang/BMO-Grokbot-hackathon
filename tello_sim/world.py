@@ -6,11 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tello_sim.step_map import SolidAABB, StepMap, load_step_map, obstacle_solids
-from tello_sim.zones import Zone, build_pad2_zones
+from tello_sim.zones import Zone, build_pad2_zones, spawn_pose
 
 
 Vec3 = tuple[float, float, float]
 Color = tuple[int, int, int]
+
+# Keep-out / "death zone" bubble around the drone centre (metres).
+# Models real-flight position imprecision — nothing may enter this radius.
+SAFE_RADIUS = 0.40
 
 
 @dataclass(frozen=True)
@@ -209,7 +213,6 @@ def _floor_and_shell(
     floor_b = (58, 62, 70)
     wall_c = (90, 96, 108)
     accent = (210, 140, 60)
-    pad_c = (80, 180, 220)
 
     # Floor grid (2 m tiles — room is ~24×12 m)
     step_sz = 2.0
@@ -264,9 +267,7 @@ def _floor_and_shell(
         color=wall_body, top_color=wall_top, name="wall_north",
     )
 
-    # Takeoff pad at origin
-    segments.append(Segment3((-0.5, 0.0, 0.02), (0.5, 0.0, 0.02), pad_c, 3))
-    segments.append(Segment3((0.0, -0.5, 0.02), (0.0, 0.5, 0.02), pad_c, 3))
+    # Compass mark on the north wall (pad marker is drawn at HUB.origin in build_room)
     segments.append(Segment3((-0.7, y1, 1.5), (0.7, y1, 1.5), (70, 200, 120), 3))
     segments.append(Segment3((0.0, y1, 1.1), (0.0, y1, 1.9), (70, 200, 120), 3))
     segments.append(Segment3((x0 + 0.5, y0 + 0.5, 0.05), (x0 + 1.5, y0 + 0.5, 0.05), accent, 2))
@@ -313,7 +314,87 @@ def _zone_viz(zones: list[Zone]) -> tuple[list[Quad3], list[Segment3]]:
         hx, hy, hz = zn.hover_point
         segments.append(Segment3((hx - 0.25, hy, hz), (hx + 0.25, hy, hz), zn.color, 3))
         segments.append(Segment3((hx, hy - 0.25, hz), (hx, hy + 0.25, hz), zn.color, 3))
+        # Origin / spawn marker (HUB) — diamond on the floor
+        if zn.origin is not None:
+            ox, oy, oz = zn.origin
+            z = max(0.03, oz + 0.03)
+            c = (255, 120, 40)
+            segments.append(Segment3((ox, oy - 0.35, z), (ox + 0.35, oy, z), c, 3))
+            segments.append(Segment3((ox + 0.35, oy, z), (ox, oy + 0.35, z), c, 3))
+            segments.append(Segment3((ox, oy + 0.35, z), (ox - 0.35, oy, z), c, 3))
+            segments.append(Segment3((ox - 0.35, oy, z), (ox, oy - 0.35, z), c, 3))
     return quads, segments
+
+
+def _add_pad_mezz_props(
+    zones: list[Zone],
+    z_ceil: float,
+    obstacles: list[Obstacle],
+    quads: list[Quad3],
+    segments: list[Segment3],
+) -> None:
+    """Extra scenario solids: wall on PAD↔UNDER_MEZZ + 1×1 column into ZONE_7."""
+    by_id = {z.id.upper(): z for z in zones}
+    pad = by_id.get("PAD")
+    mezz = by_id.get("UNDER_MEZZ")
+    hub = by_id.get("HUB")
+    zone7 = by_id.get("ZONE_7")
+    wall_body, wall_top = KIND_COLORS["wall"]
+    block_body, block_top = KIND_COLORS["block"]
+
+    if pad is not None and mezz is not None:
+        # Shared vertical border (PAD is east of UNDER_MEZZ in the catalog)
+        wall_x = 0.5 * (mezz.xmax + pad.xmin)
+        y0 = max(pad.ymin, mezz.ymin)
+        y1 = min(pad.ymax, mezz.ymax)
+        if y1 - y0 < 0.4:
+            y0 = min(pad.ymin, mezz.ymin)
+            y1 = max(pad.ymax, mezz.ymax)
+        thickness = 0.15
+        _add_box(
+            obstacles,
+            quads,
+            segments,
+            xmin=wall_x - 0.5 * thickness,
+            xmax=wall_x + 0.5 * thickness,
+            ymin=y0,
+            ymax=y1,
+            zmin=0.0,
+            zmax=z_ceil,
+            color=wall_body,
+            top_color=wall_top,
+            name="wall_pad_under_mezz",
+        )
+
+    # 1×1 m column to ceiling at the ZONE_7 ↔ HUB ↔ UNDER_MEZZ corner, inside ZONE_7
+    half = 0.5
+    if zone7 is None:
+        return
+    # SE corner of ZONE_7 is where it meets HUB (east) and UNDER_MEZZ (south)
+    cx = zone7.xmax - half
+    cy = zone7.ymin + half
+    # Nudge fully inside if HUB/UNDER_MEZZ edges sit slightly inside ZONE_7
+    if hub is not None:
+        cx = min(cx, hub.xmin - half)
+    if mezz is not None:
+        cy = max(cy, mezz.ymax + half)
+    # Keep the whole 1×1 footprint inside ZONE_7
+    cx = min(max(cx, zone7.xmin + half), zone7.xmax - half)
+    cy = min(max(cy, zone7.ymin + half), zone7.ymax - half)
+    _add_box(
+        obstacles,
+        quads,
+        segments,
+        xmin=cx - half,
+        xmax=cx + half,
+        ymin=cy - half,
+        ymax=cy + half,
+        zmin=0.0,
+        zmax=z_ceil,
+        color=block_body,
+        top_color=block_top,
+        name="pillar_1x1_ceil",
+    )
 
 
 def build_room(step_path: str | Path | None = None) -> RoomGeometry:
@@ -332,6 +413,13 @@ def build_room(step_path: str | Path | None = None) -> RoomGeometry:
         _add_solid(solid, obstacles, quads, segments)
 
     zones = build_pad2_zones(step)
+    _add_pad_mezz_props(zones, step.zmax, obstacles, quads, segments)
+    # Takeoff pad crosshair follows HUB.origin
+    ox, oy, oz = spawn_pose(zones)
+    pad_c = (80, 180, 220)
+    zpad = max(0.02, oz + 0.02)
+    segments.append(Segment3((ox - 0.5, oy, zpad), (ox + 0.5, oy, zpad), pad_c, 3))
+    segments.append(Segment3((ox, oy - 0.5, zpad), (ox, oy + 0.5, zpad), pad_c, 3))
     zone_quads, zone_segments = _zone_viz(zones)
 
     return RoomGeometry(

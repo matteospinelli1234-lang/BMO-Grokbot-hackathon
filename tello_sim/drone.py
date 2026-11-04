@@ -7,7 +7,13 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from tello_sim.world import Obstacle, build_room, find_support, resolve_sphere_collision
+from tello_sim.world import (
+    SAFE_RADIUS,
+    Obstacle,
+    build_room,
+    find_support,
+    resolve_sphere_collision,
+)
 
 
 @dataclass
@@ -54,7 +60,8 @@ class Drone:
     yaw_speed: float = 60.0  # deg/s
 
     prop_angle: float = 0.0
-    collision_radius: float = 0.16
+    # Keep-out bubble (death zone) — centre may not approach solids closer than this
+    collision_radius: float = SAFE_RADIUS
     collided: bool = False
     perched: bool = False  # grounded on furniture (not floor)
     _landing: bool = False
@@ -153,6 +160,15 @@ class Drone:
             self.set_rc(0, 0, 0, 0)
             return True
 
+    def cancel_motion(self) -> None:
+        """Abort scripted move / yaw and kill residual velocity (for replanning)."""
+        with self._lock:
+            self.move_target = None
+            self.yaw_target = None
+            self.vx = self.vy = self.vz = 0.0
+            self.yaw_rate = 0.0
+            self.set_rc(0, 0, 0, 0)
+
     def is_move_done(self) -> bool:
         """True once the physics step has cleared any scripted target."""
         with self._lock:
@@ -249,11 +265,11 @@ class Drone:
             elif self.flying:
                 self.yaw = (self.yaw + self.yaw_rate * dt) % 360.0
 
-            # Clamp to room (inside wall thickness)
-            margin = 0.25
+            # Clamp to room — stay a full safe bubble clear of the outer walls
+            margin = max(0.25, self.collision_radius + 0.05)
             self.x = max(self.room_xmin + margin, min(self.room_xmax - margin, self.x))
             self.y = max(self.room_ymin + margin, min(self.room_ymax - margin, self.y))
-            self.z = max(0.0, min(self.room_height - 0.15, self.z))
+            self.z = max(0.0, min(self.room_height - self.collision_radius, self.z))
 
             support = self.support_z()
 

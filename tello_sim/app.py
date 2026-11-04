@@ -18,6 +18,7 @@ _SHARED_DRONE: Drone | None = None
 _SHARED_LOCK = threading.Lock()
 _APP_THREAD: threading.Thread | None = None
 _APP_RUNNING = threading.Event()
+_APP_STOP = threading.Event()
 _RENDERER: Renderer | None = None
 
 
@@ -88,6 +89,12 @@ def run_app(
     drone.room_ymin = renderer.room.ymin
     drone.room_ymax = renderer.room.ymax
     drone.room_height = renderer.room.zmax
+    # Place grounded craft on HUB.origin unless an API client already moved it
+    if not drone.flying and drone.move_target is None:
+        from tello_sim.zones import build_pad2_zones, spawn_pose
+
+        ox, oy, oz = spawn_pose(build_pad2_zones())
+        drone.x, drone.y, drone.z = float(ox), float(oy), float(oz)
     _RENDERER = renderer
     pygame_caption = f"Tello Talent — {renderer.room.source}"
 
@@ -101,6 +108,7 @@ def run_app(
         pygame.display.set_caption(pygame_caption)
 
     clock = pygame.time.Clock()
+    _APP_STOP.clear()
     _APP_RUNNING.set()
     start = time.perf_counter()
     running = True
@@ -109,7 +117,7 @@ def run_app(
     z_was_down = False
 
     try:
-        while running:
+        while running and not _APP_STOP.is_set():
             dt = clock.tick(60) / 1000.0
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -181,6 +189,19 @@ def start_app_background(**kwargs) -> threading.Thread:
             break
         time.sleep(0.02)
     return _APP_THREAD
+
+
+def stop_app(timeout: float = 2.0) -> None:
+    """Ask the background visual loop to quit and wait briefly."""
+    _APP_STOP.set()
+    try:
+        pygame.event.post(pygame.event.Event(pygame.QUIT))
+    except Exception:
+        pass
+    thread = _APP_THREAD
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=timeout)
+    _PHYSICS_STOP.set()
 
 
 _PHYSICS_THREAD: threading.Thread | None = None

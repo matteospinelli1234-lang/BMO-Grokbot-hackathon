@@ -15,13 +15,14 @@ from tello_sim.zones import (
     DEFAULT_ZONES_PATH,
     Zone,
     build_pad2_zones,
+    default_hub_zone,
     default_pad2_zones,
     save_zones,
     update_zone_bounds,
 )
 
 
-Handle = str  # "c0".."c3" corners, or "hover"
+Handle = str  # "c0".."c3" corners, "hover", or "origin"
 
 
 def _ray_hit_z_plane(
@@ -141,7 +142,15 @@ class ZoneEditor:
         if pr is not None:
             d = math.hypot(pr[0] - mx, pr[1] - my)
             if d < best_d:
+                best_d = d
                 best = "hover"
+        if zn.origin is not None:
+            ox, oy, oz = zn.origin
+            pr = project_point((ox, oy, oz), cam, self.width, self.height)
+            if pr is not None:
+                d = math.hypot(pr[0] - mx, pr[1] - my)
+                if d < best_d:
+                    best = "origin"
         return best
 
     def _apply_corner_drag(self, idx: int, wx: float, wy: float) -> None:
@@ -183,10 +192,41 @@ class ZoneEditor:
                 color=zn.color,
                 priority=zn.priority,
                 hover=(hx, hy, hz),
+                origin=zn.origin,
             ),
         )
         self.dirty = True
         self._rebuild_viz()
+
+    def _apply_origin_drag(self, wx: float, wy: float) -> None:
+        """Move the sim spawn point (HUB.origin) inside the selected zone."""
+        zn = self._sel()
+        if zn is None or zn.origin is None:
+            return
+        ox = min(max(wx, zn.xmin + 0.05), zn.xmax - 0.05)
+        oy = min(max(wy, zn.ymin + 0.05), zn.ymax - 0.05)
+        oz = zn.origin[2]
+        _replace_zone(
+            self.zones,
+            self.selected,
+            Zone(
+                id=zn.id,
+                label=zn.label,
+                xmin=zn.xmin,
+                xmax=zn.xmax,
+                ymin=zn.ymin,
+                ymax=zn.ymax,
+                zmin=zn.zmin,
+                zmax=zn.zmax,
+                color=zn.color,
+                priority=zn.priority,
+                hover=zn.hover,
+                origin=(ox, oy, oz),
+            ),
+        )
+        self.dirty = True
+        self._rebuild_viz()
+        self.status = f"{zn.id} origin → ({ox:.2f}, {oy:.2f}, {oz:.2f})"
 
     def _nudge_z(self, which: str, delta: float) -> None:
         zn = self._sel()
@@ -241,6 +281,19 @@ class ZoneEditor:
             if pr:
                 pygame.draw.circle(main, (255, 220, 80), (pr[0], pr[1]), 8)
                 pygame.draw.circle(main, (20, 20, 20), (pr[0], pr[1]), 3)
+            if zn.origin is not None:
+                ox, oy, oz = zn.origin
+                pr = project_point((ox, oy, oz), cam, self.width, self.height)
+                if pr:
+                    # Orange diamond = sim spawn / takeoff origin
+                    pts = [
+                        (pr[0], pr[1] - 10),
+                        (pr[0] + 10, pr[1]),
+                        (pr[0], pr[1] + 10),
+                        (pr[0] - 10, pr[1]),
+                    ]
+                    pygame.draw.polygon(main, (255, 140, 40), pts)
+                    pygame.draw.polygon(main, (20, 20, 20), pts, 1)
 
         # Labels
         for i, z in enumerate(self.zones):
@@ -262,17 +315,21 @@ class ZoneEditor:
             panel += [
                 f"  XY [{zn.xmin:.2f},{zn.xmax:.2f}] × [{zn.ymin:.2f},{zn.ymax:.2f}]",
                 f"  Z  [{zn.zmin:.2f},{zn.zmax:.2f}]   pri={zn.priority}",
-                f"  hover ({zn.hover_point[0]:.2f}, {zn.hover_point[1]:.2f}, {zn.hover_point[2]:.2f})",
+                f"  hover  ({zn.hover_point[0]:.2f}, {zn.hover_point[1]:.2f}, {zn.hover_point[2]:.2f})",
             ]
+            if zn.origin is not None:
+                ox, oy, oz = zn.origin
+                panel.append(f"  origin ({ox:.2f}, {oy:.2f}, {oz:.2f})  ← sim spawn")
         panel += [
             "",
             self.status,
             "",
-            "LMB select / drag corner or hover",
+            "LMB select / drag corner, hover, origin",
             "RMB drag orbit   Wheel zoom",
             "Tab cycle   [ ] zmin   - = zmax",
             "S save   O load defaults   M map mesh",
-            "N new zone   Del delete   Esc quit",
+            "N new zone   H ensure HUB   Del delete",
+            "Esc quit",
         ]
         y = 12
         for i, line in enumerate(panel):
@@ -350,6 +407,18 @@ class ZoneEditor:
                                 wx, wy = hit
                                 if self.dragging == "hover":
                                     self._apply_hover_drag(wx, wy)
+                                elif self.dragging == "origin":
+                                    # Drag on the floor / origin height plane
+                                    ohit = _ray_hit_z_plane(
+                                        mx,
+                                        my,
+                                        cam,
+                                        self.width,
+                                        self.height,
+                                        max(0.02, (zn.origin[2] if zn.origin else 0.0) + 0.02),
+                                    )
+                                    if ohit is not None:
+                                        self._apply_origin_drag(ohit[0], ohit[1])
                                 elif self.dragging.startswith("c"):
                                     self._apply_corner_drag(int(self.dragging[1]), wx, wy)
 
@@ -417,6 +486,7 @@ class ZoneEditor:
                         color=(100, 200, 255),
                         priority=base.priority,
                         hover=None,
+                        origin=None,
                     )
                 )
             else:
@@ -432,19 +502,57 @@ class ZoneEditor:
                     color=(100, 200, 255),
                     priority=20,
                     hover=(0, 0, 0.9),
+                    origin=None,
                 )
             self.zones.append(z)
             self.selected = len(self.zones) - 1
             self.dirty = True
             self._rebuild_viz()
             self.status = f"Created {new_id}"
+        elif key == pygame.K_h:
+            # Ensure HUB exists with an editable origin (sim spawn)
+            hub_i = next((i for i, z in enumerate(self.zones) if z.id.upper() == "HUB"), None)
+            if hub_i is None:
+                self.zones.insert(0, default_hub_zone())
+                self.selected = 0
+                self.status = "Added HUB zone with origin (sim spawn)"
+            else:
+                hub = self.zones[hub_i]
+                if hub.origin is None:
+                    hx, hy, _ = hub.hover_point
+                    self.zones[hub_i] = Zone(
+                        id=hub.id,
+                        label=hub.label,
+                        xmin=hub.xmin,
+                        xmax=hub.xmax,
+                        ymin=hub.ymin,
+                        ymax=hub.ymax,
+                        zmin=hub.zmin,
+                        zmax=hub.zmax,
+                        color=hub.color,
+                        priority=hub.priority,
+                        hover=hub.hover,
+                        origin=(hx, hy, max(0.0, hub.zmin)),
+                    )
+                    self.status = "Added origin point to HUB"
+                else:
+                    self.status = "HUB already has an origin — drag the orange diamond"
+                self.selected = hub_i
+            self.dirty = True
+            self._rebuild_viz()
         elif key == pygame.K_DELETE:
             if self.zones:
                 gone = self.zones.pop(self.selected)
-                self.selected = max(0, self.selected - 1)
+                if gone.id.upper() == "HUB":
+                    # Recreate immediately so spawn always has a home
+                    self.zones.insert(0, default_hub_zone())
+                    self.selected = 0
+                    self.status = "HUB is required — restored default HUB"
+                else:
+                    self.selected = max(0, self.selected - 1)
+                    self.status = f"Deleted {gone.id}"
                 self.dirty = True
                 self._rebuild_viz()
-                self.status = f"Deleted {gone.id}"
         return True
 
 

@@ -69,19 +69,26 @@ flying in a 3D indoor simulator with furniture obstacles and a Tello-like API.
 
   World (from PAD2.step CAD map):
     - Real hall footprint ~24 x 12 m, flyable height ~4.35 m (primary ceiling)
-    - Origin (0,0) = takeoff pad
+    - Spawn = HUB.origin (editable in zone editor; default 0,0,0)
     - Coordinates: x = right, y = forward, z = up
     - Yaw 0 looks along +y; positive yaw is clockwise from above
     - Solids from the STEP file become AABB obstacles (columns, platforms,
       blocks, ceiling). The outer shell becomes walls + floor bounds.
-    - Hitting a side stops the drone (HUD shows CONTACT)
+    - Extra scenario props (tello_sim/world.py): thin wall on the PAD ↔
+      UNDER_MEZZ border, plus a 1×1 m column from floor to ceiling at the
+      ZONE_7 ↔ HUB ↔ UNDER_MEZZ corner (footprint inside ZONE_7).
+    - Keep-out bubble SAFE_RADIUS = 0.40 m (40 cm) around the drone centre —
+      physics + path planning refuse to enter this "death zone" (models real
+      flight position imprecision). Chase cam draws the bubble while flying.
+    - Hitting the bubble against a side stops the drone (HUD shows CONTACT)
     - Landing on a top (Space / land()) perches there (HUD shows PERCHED)
     - Takeoff from a perch rises relative to that surface
     - Loader: tello_sim/step_map.py  |  map file: PAD2.step
     - Navigation zones (visible overlays, toggle with Z):
-        PAD, COLUMN_ROW, AISLE_EAST, AISLE_WEST, UNDER_MEZZ, MEZZ_TOP,
+        HUB, PAD, COLUMN_ROW, AISLE_EAST, AISLE_WEST, UNDER_MEZZ, MEZZ_TOP,
         UNDER_NW_DECK, NW_DECK, SOUTH_BLOCK, NORTH_OPEN
       Defined in tello_sim/zones.py — HUD shows the active zone id.
+      HUB has an extra orange "origin" point = sim takeoff / connect spawn.
       Collision-aware tour of every zone:
         python examples/tour_zones.py
         python examples/tour_zones.py --headless
@@ -89,8 +96,22 @@ flying in a 3D indoor simulator with furniture obstacles and a Tello-like API.
       Scripted go_to_xyz() turns to face the travel direction (FPV forward).
       Edit zones visually (rectangles on the PAD2 map):
         python zone_editor.py
-        — drag corners / hover, [ ] zmin, - = zmax, S save → zones.json
+        — drag corners / hover / origin (orange diamond on HUB)
+        — [ ] zmin, - = zmax, H ensure HUB, S save → zones.json
         Sim + tour auto-load zones.json when present.
+      Text control of the sim (zone-to-zone):
+        python tello_commander.py
+        tello> go from PAD to NORTH
+        tello> go to MEZZ TOP
+        tello> status
+        tello> land
+        tello> quit
+      Real Tello Talent commander (WASD pilot + text; agent-ready):
+        python tello_irl_commander.py              # real AP Wi-Fi
+        python tello_irl_commander.py --sim        # same UI on the sim
+        python tello_irl_commander.py -c takeoff -c "go to NORTH" -c land
+        API: from tello_irl import DroneSession
+             session.execute("go to NORTH") / session.set_rc(...)
 
   Visuals:
     - Main view: chase camera (press C for orbit)
