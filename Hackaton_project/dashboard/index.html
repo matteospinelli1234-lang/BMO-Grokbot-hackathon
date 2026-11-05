@@ -96,7 +96,7 @@
   <section class="largo">
     <details>
       <summary>Grafana (statistiche: serve <code>docker compose up -d</code> nella cartella dashboard)</summary>
-      <iframe id="grafana" loading="lazy" data-src="http://localhost:3000/d/drone-konsol?kiosk&refresh=5s"></iframe>
+      <iframe id="grafana" loading="lazy"></iframe>
     </details>
   </section>
 </main>
@@ -235,7 +235,9 @@ async function emergenza() {
 }
 document.querySelector("details").addEventListener("toggle", ev => {
   const f = $("grafana");
-  if (ev.target.open && !f.src) f.src = f.dataset.src;
+  // stesso PC della console (anche dal telefono): Grafana sulla porta 3000, foto prese da questa centrale
+  if (ev.target.open && !f.src) f.src = `${location.protocol}//${location.hostname}:3000/d/drone-konsol?kiosk&refresh=5s` +
+    `&var-centrale=${encodeURIComponent(location.host)}`;
 });
 setInterval(aggiorna, 1500);
 aggiorna();

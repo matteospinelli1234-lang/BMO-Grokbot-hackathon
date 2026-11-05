@@ -7,6 +7,7 @@ Grok confronta telecamera e foto: ANOMALY DETECTED o FALSO ALLARME. Tutto è sul
     python centrale.py                       drone simulato, telecamere vere (IP Webcam)
     python centrale.py --camere-finte        drone e telecamere simulati: in dashboard «Simula evento» (prova completa)
     python centrale.py --arm --senza-tof     volo vero
+    python centrale.py ... --telefono        dashboard aperta anche dal telefono (stampa l'indirizzo da usare)
 Dashboard: http://localhost:5000 (console operatore). Grafana (facoltativo): cd dashboard, docker compose up -d,
 poi http://localhost:3000/d/drone-konsol; legge dashboard/logs/events.json come la dashboard del team.
 
@@ -774,6 +775,25 @@ def prepara_drone(arm, usa_tof):
     return drone, volo, mappa
 
 
+def indirizzi_di_rete():
+    """Indirizzi IPv4 del PC sulle reti locali (quelli da aprire dal telefono), senza 127.x e 169.254.x.
+    Primo quello della rete principale (verso Internet), poi gli altri, tra cui gli adattatori virtuali (WSL, Hyper-V)."""
+    import socket
+    try:
+        tutti = {info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)}
+    except OSError:
+        tutti = set()
+    principale = None
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))                       # nessun pacchetto inviato: sceglie solo l'interfaccia
+            principale = s.getsockname()[0]
+    except OSError:
+        pass
+    altri = sorted(ip for ip in tutti - {principale} if not ip.startswith(("127.", "169.254.")))
+    return ([principale] if principale else []) + altri
+
+
 def main(argomenti):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--arm", action="store_true", help="drone vero")
@@ -784,8 +804,12 @@ def main(argomenti):
     parser.add_argument("--host", default="127.0.0.1",
                         help="127.0.0.1 = dashboard solo da questo PC; 0.0.0.0 = da tutta la rete (chiunque può "
                              "mandare il drone)")
+    parser.add_argument("--telefono", action="store_true",
+                        help="come --host 0.0.0.0: dashboard da telefono o tablet sulla stessa rete Wi-Fi")
     parser.add_argument("--porta", type=int, default=5000)
     a = parser.parse_args(argomenti)
+    if a.telefono:
+        a.host = "0.0.0.0"
     camere = configura_telecamere((lambda _: "") if a.senza_domande else input)
     client = None
     if not a.senza_grok:
@@ -810,7 +834,14 @@ def main(argomenti):
     server = crea_server(centrale, a.host, a.porta)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"\nDashboard: http://localhost:{a.porta}   (Grafana: cd dashboard; docker compose up -d -> "
-          "http://localhost:3000/d/drone-konsol)\nCtrl+C per chiudere (il drone atterra).")
+          "http://localhost:3000/d/drone-konsol)")
+    if a.host == "0.0.0.0":
+        indirizzi = indirizzi_di_rete()
+        print("Dal telefono, sulla stessa rete Wi-Fi del PC: " +
+              (f"http://{indirizzi[0]}:{a.porta}" if indirizzi else "nessun indirizzo di rete trovato") +
+              (f"   (se non va, altri indirizzi del PC: {', '.join(indirizzi[1:])})" if len(indirizzi) > 1 else "") +
+              "\nAttenzione: chiunque su quella rete può aprire la dashboard e mandare il drone.")
+    print("Ctrl+C per chiudere (il drone atterra).")
     try:
         while True:
             time.sleep(0.5)

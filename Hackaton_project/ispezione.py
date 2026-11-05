@@ -63,8 +63,9 @@ BATTERIA_MIN = 20               # sotto: atterra dove si trova
 BATTERIA_RITORNO = 30           # sotto: niente foto, torna al pad
 INTERVALLO_BATTERIA_S = 20      # lettura della batteria anche durante i movimenti
 INTERVALLO_KEEPALIVE_S = 4      # il Tello atterra da solo dopo 15 s senza comandi (attese di Grok)
-ATTESA_STABILIZZAZIONE_S = 1.0  # prima di una foto: il drone si ferma dopo rotazioni e frenate (0,5 s: foto mosse)
-FINESTRA_FOTO_S = 1.5           # si raccolgono i fotogrammi di questo intervallo e si salva il migliore
+ATTESA_STABILIZZAZIONE_S = 0.5  # prima di una foto: il drone si ferma dopo rotazioni e frenate. Era 1,0 s quando si
+                                # salvava l'ultimo fotogramma (foto mosse); ora i fotogrammi mossi li scarta la scelta
+FINESTRA_FOTO_S = 1.2           # del più nitido in questa finestra: in tutto 1,7 s per foto invece di 2,5
 # video per foto migliori [ipotesi, comandi dell'SDK 3.0]: 720p, 15 fotogrammi al secondo e bitrate massimo (5 Mbps):
 # più dati per fotogramma, meno blocchi di compressione. Se il Wi-Fi è debole il bitrate alto può perdere più pacchetti.
 IMPOSTAZIONI_VIDEO = ("setresolution high", "setfps middle", "setbitrate 5")
@@ -250,6 +251,7 @@ class Ispezione:
         self.tracce = [(0.0, 0.0)]
         self.lettore = None
         self.ultima_foto = None
+        self._salvataggi, self._in_salvataggio = None, []    # foto corrette e scritte in un thread
         threading.Thread(target=self._keepalive, daemon=True).start()
 
     # --- registro e fasi ---
@@ -418,10 +420,12 @@ class Ispezione:
     def stato(self):
         return self.drone.get_current_state()
 
-    def tof_cm(self):
+    def tof_cm(self, libero_oltre_cm=None):
         """Distanza davanti in cm (mediana delle letture valide su 3), None se oltre circa 120 cm o ToF disattivato.
-        Se la prima lettura non vede nulla basta quella. 0 mm non è una distanza: il 5 novembre il sensore ha letto
-        sempre 0 anche a terra con niente davanti (il giorno prima misurava 47-54 cm). Tre 0 di fila = guasto."""
+        Se la prima lettura non vede nulla, o vede qualcosa oltre libero_oltre_cm (strada libera per il passo), basta
+        quella: le altre due servono solo a confermare un ostacolo (meno pause tra un passo e l'altro).
+        0 mm non è una distanza: il 5 novembre il sensore ha letto sempre 0 anche a terra con niente davanti (il giorno
+        prima misurava 47-54 cm). Tre 0 di fila = guasto."""
         if not self.usa_tof:
             return None
         valori = []
@@ -430,6 +434,8 @@ class Ispezione:
             valori.append(int(re.findall(r"\d+", risposta)[-1]))
             if i == 0 and valori[0] > 1250:
                 return None
+            if i == 0 and libero_oltre_cm is not None and valori[0] > 10 * libero_oltre_cm:
+                return valori[0] / 10
         validi = sorted(v for v in valori if v > 0)
         if not validi:
             raise RuntimeError("sensore ToF frontale: 0 mm in 3 letture di fila, è coperto o guasto: "
@@ -438,12 +444,15 @@ class Ispezione:
         return None if mm > 1250 else mm / 10
 
     def libero(self, cm):
-        d = self.tof_cm()
+        d = self.tof_cm(libero_oltre_cm=cm + DISTANZA_SICUREZZA_CM)
         return d is None or d > cm + DISTANZA_SICUREZZA_CM, d
 
     # --- orientamento e movimento ---
-    def direzione(self):
-        time.sleep(PAUSA_YAW_S)
+    def direzione(self, pausa_s=PAUSA_YAW_S):
+        """Direzione dal decollo (gradi, antioraria). La pausa lascia arrivare lo stato dopo una rotazione; tra due passi
+        dello stesso tratto non serve (pausa_s=0)."""
+        if pausa_s:
+            time.sleep(pausa_s)
         return norma(-VERSO_YAW * (self.stato()["yaw"] - self.yaw0))
 
     def ruota_verso(self, obiettivo, tolleranza=TOLLERANZA_GRADI):
@@ -456,8 +465,8 @@ class Ispezione:
             if self.esegui(f"{'ccw' if errore > 0 else 'cw'} {max(1, round(abs(errore)))}"):
                 fatte += 1                                   # risposta persa: non conta, si rimisura lo yaw
 
-    def avanza(self, cm):
-        a = math.radians(self.direzione())
+    def avanza(self, cm, pausa_s=PAUSA_YAW_S):
+        a = math.radians(self.direzione(pausa_s))
         self.avanzamento = (a, cm, time.time())              # per la posizione dal vivo in dashboard
         try:
             self.esegui(f"forward {int(cm)}")
@@ -485,8 +494,11 @@ class Ispezione:
         distanza dell'ostacolo che lo ha fermato."""
         rimasti = round(cm_totali)
         massimo = PASSO_CON_TOF_CM if self.usa_tof else PASSO_MAX_CM
+        passi = max(1, math.ceil(rimasti / massimo))
+        primo = True
         while rimasti >= PASSO_MIN_CM:
-            passo = min(massimo, rimasti)
+            passo = min(massimo, max(PASSO_MIN_CM, math.ceil(rimasti / passi)))   # passi uguali: 480 = 5 x 96
+            passi = max(1, passi - 1)
             fine = time.time() + attesa_s
             ok, d = self.libero(passo)
             while not ok and time.time() < fine:
@@ -496,7 +508,8 @@ class Ispezione:
                 ok, d = self.libero(passo)
             if not ok:
                 return d
-            self.avanza(passo)
+            self.avanza(passo, PAUSA_YAW_S if primo else 0.0)   # dopo il primo passo nessuna rotazione: niente pausa
+            primo = False
             rimasti -= passo
         return None
 
@@ -767,8 +780,10 @@ class Ispezione:
             time.sleep(0.03)
         return (migliore[1], migliore[0]) if migliore else (None, {})
 
-    def foto(self, nome):
-        """Salva il fotogramma migliore corretto (migliora_foto) e, in originali/, quello com'era."""
+    def foto(self, nome, in_fondo=False):
+        """Salva il fotogramma migliore corretto (migliora_foto) e, in originali/, quello com'era.
+        in_fondo: correzione e salvataggio in un thread, così il drone gira subito verso il lato dopo (le 4 foto della
+        tappa); restituisce (percorso, None) e i file sono pronti dopo attendi_foto()."""
         os.makedirs(os.path.join(self.cartella_foto, "originali"), exist_ok=True)
         grezza, misure = self.fotogramma_nitido()
         if grezza is None:                                   # video non arrivato: si continua senza foto
@@ -777,14 +792,33 @@ class Ispezione:
             return None, None
         file = f"{time.strftime('%Y%m%d_%H%M%S')}_{nome}.jpg"
         percorso = os.path.join(self.cartella_foto, file)
-        cv2.imwrite(os.path.join(self.cartella_foto, "originali", file), grezza, [cv2.IMWRITE_JPEG_QUALITY, 95])
-        immagine = migliora_foto(grezza)
-        cv2.imwrite(percorso, immagine, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+        def salva():
+            cv2.imwrite(os.path.join(self.cartella_foto, "originali", file), grezza, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            corretta = migliora_foto(grezza)
+            cv2.imwrite(percorso, corretta, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            return corretta
+
+        if in_fondo:
+            if self._salvataggi is None:
+                self._salvataggi = ThreadPoolExecutor(max_workers=1)
+            self._in_salvataggio.append(self._salvataggi.submit(salva))
+            immagine = None
+        else:
+            immagine = salva()
         self.ultima_foto = percorso
         print(f"  Foto {file}: nitidezza {misure['nitidezza']:.0f}, blocchi {misure['blocchi']:.2f}, "
               f"luce {misure['luce']:.0f}/255" + ("  (POCA LUCE)" if misure["luce"] < 60 else ""))
         self.registra("misura", "qualita_foto", foto=percorso, **{k: round(v, 2) for k, v in misure.items()})
         return percorso, immagine
+
+    def attendi_foto(self):
+        """Aspetta che le foto salvate in un thread (foto(..., in_fondo=True)) siano scritte su disco."""
+        while self._in_salvataggio:
+            try:
+                self._in_salvataggio.pop(0).result(timeout=30)
+            except Exception as e:
+                print("Foto non salvata:", e)
 
     # --- pezzi comuni a missione e giro ---
     def _azzera(self):
@@ -896,7 +930,7 @@ class Ispezione:
             self.cambia_fase(f"tappa {nome}: foto verso {lato}")
             self.ruota_verso(norma(gradi - self.base[2]))
             time.sleep(ATTESA_STABILIZZAZIONE_S)
-            file_foto, _ = self.foto(f"tappa{i}_{nome_file(nome)}_{lato}")
+            file_foto, _ = self.foto(f"tappa{i}_{nome_file(nome)}_{lato}", in_fondo=True)
             self.registra("misura", "foto", foto=file_foto, tappa=nome, lato=lato)
             fatte.append((lato, file_foto))
         return fatte
@@ -939,5 +973,6 @@ class Ispezione:
         finally:
             self._atterra_e_chiudi(pianta_pulita)
             self._ferma_video()
+            self.attendi_foto()                              # centrale.py legge le foto appena il giro finisce
             self.fase = "a terra"
         return raggiunte

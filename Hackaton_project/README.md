@@ -77,6 +77,25 @@ Quando Grok vede un'anomalia compare un avviso in alto a destra: «Grok ha visto
 CONFERMATA» quando il verdetto dopo le foto del drone è ANOMALY DETECTED. Resta finché non lo chiudi con la ×.
 Ogni evento finisce in `dashboard/logs/events.json`, che Grafana legge (vedi sotto).
 
+## Dashboard dal telefono
+
+1. Telefono e PC sulla **stessa rete Wi-Fi** (quella delle telecamere, non il Wi-Fi del drone).
+2. Avvia la centrale con `--telefono` in più, per esempio:
+
+```bash
+uv run centrale.py --arm --senza-tof --telefono
+```
+
+3. All'avvio la centrale stampa gli indirizzi da aprire sul telefono, per esempio `http://192.168.5.224:5000`. Scrivilo
+   con `http://` davanti, sul telefono `localhost` non funziona.
+4. La prima volta Windows chiede il permesso per Python: consenti l'accesso.
+
+La console funziona tutta dal telefono: decisioni, pianta, telemetria, foto, avvisi, STOP ed EMERGENZA. Il riquadro
+Grafana in fondo usa da solo l'indirizzo del PC, quindi anche le foto nelle tabelle si vedono dal telefono. Grafana si
+può aprire anche direttamente: `http://<IP del PC>:3000/d/drone-konsol`.
+
+**Attenzione:** con `--telefono` chiunque sia su quella rete può aprire la dashboard e mandare il drone: non c'è password.
+
 ## Sicurezza
 
 - **Conferma umana** prima di ogni volo.
@@ -84,10 +103,10 @@ Ogni evento finisce in `dashboard/logs/events.json`, che Grafana legge (vedi sot
   trova.
 - **STOP** (dashboard o SPAZIO sul PC): il drone atterra subito dove si trova e la coda si svuota.
 - **EMERGENZA** (dashboard o BACKSPACE sul PC): motori spenti, il drone cade. Ctrl+C chiude facendo atterrare il drone.
-- **Il drone vola a 1,70 m, all'altezza della testa**: nessuno nella sala lungo i percorsi. Sul nostro Talent il
-  sensore frontale (ToF) è guasto, quindi il drone si protegge solo con la pianta.
-- La dashboard risponde solo a questo PC (`127.0.0.1`). Con `--host 0.0.0.0` chiunque sulla rete potrebbe mandare il
-  drone.
+- **Il drone vola a 1,70 m, all'altezza della testa**: nessuno nella sala lungo i percorsi. Con `--senza-tof` (sensore
+  frontale guasto, o Tello EDU che non ce l'ha) il drone si protegge solo con la pianta.
+- La dashboard risponde solo a questo PC (`127.0.0.1`). Con `--telefono` (o `--host 0.0.0.0`) chiunque sulla rete
+  potrebbe mandare il drone.
 
 ## Volo vero
 
@@ -120,8 +139,9 @@ Togli `--senza-tof` solo se il sensore frontale funziona: i controlli a terra pr
 | `--senza-domande` | zone delle telecamere uguali all'ultima volta, senza chiederle |
 | `--senza-grok` | niente Grok, anche se c'è la chiave |
 | `--arm` | drone vero: controlli a terra e conferma prima di avviare |
-| `--senza-tof` | ignora il sensore frontale guasto |
-| `--host 0.0.0.0` | dashboard visibile da altri PC della rete |
+| `--senza-tof` | ignora il sensore frontale (guasto, o Tello EDU che non lo ha) |
+| `--telefono` | dashboard apribile dal telefono sulla stessa rete; stampa l'indirizzo da usare |
+| `--host 0.0.0.0` | come `--telefono` |
 | `--porta N` | porta della dashboard (predefinita 5000) |
 
 ## Altri comandi
@@ -132,7 +152,7 @@ Togli `--senza-tof` solo se il sensore frontale funziona: i controlli a terra pr
 | `uv run prova_casi.py` | prove del volo e delle telecamere in simulazione (kill switch, batteria, risposte perse, 4 foto, verdetto) |
 | `uv run prova_centrale.py` | prova completa della centrale con la dashboard, senza drone né rete |
 | `cd dashboard` poi `docker compose up -d` | Grafana con Loki e Alloy: http://localhost:3000/d/drone-konsol |
-| `uv run dashboard/crea_grafana.py --prova` | rigenera la dashboard di Grafana dopo aver controllato ogni query su Loki |
+| `uv run dashboard/crea_grafana.py --prova` | rigenera la dashboard di Grafana dopo aver controllato ogni query su Loki (`--centrale IP:5000` cambia l'indirizzo predefinito delle foto) |
 
 ## File
 
@@ -151,12 +171,68 @@ Togli `--senza-tof` solo se il sensore frontale funziona: i controlli a terra pr
 Foto (`dashboard/frames/`), registri (`dashboard/logs/`, `dashboard/registro_volo.jsonl`) e `dashboard/camere.json`
 si creano durante l'uso e **non vanno nel repository**: le foto possono mostrare persone.
 
+## Specifiche tecniche
+
+**Hardware**
+
+| Cosa | Valore |
+| --- | --- |
+| Drone | DJI Tello Talent (RoboMaster TT, SDK 3.0) oppure Tello EDU (SDK 2.0, senza sensore frontale: solo con `--senza-tof`) |
+| Sensore frontale | ToF del modulo di espansione del Talent, portata circa 1,2 m, letto con `EXT tof?` |
+| Posizione in volo | stimata: distanze dei comandi `forward` (misurate dal Tello con la telecamera in basso) e direzione dall'IMU (`yaw`) |
+| Pad | mission pad del Tello, visto dalla telecamera in basso tra 0,3 e 1,2 m di quota |
+| Telecamere fisse | telefoni con IP Webcam, flusso MJPEG `http://IP:8080/video` |
+| PC | Windows (tasti SPAZIO/BACKSPACE letti con `GetAsyncKeyState`), Wi-Fi del drone più un collegamento a telecamere e Internet |
+
+**Software**
+
+| Cosa | Valore |
+| --- | --- |
+| Linguaggio | Python 3.14, dipendenze in `pyproject.toml` e `uv.lock` |
+| Librerie | djitellopy 2.5 (comandi del Tello), OpenCV 4.x (video, rilevamento, foto), NumPy, openai (client verso xAI) |
+| Grok | modello `grok-4.5` su `https://api.x.ai/v1`, risposte in JSON |
+| Server della dashboard | `http.server` della libreria standard (nessun Flask), porta 5000 |
+| Statistiche | Docker: Loki (3100), Alloy, Grafana (3000), dashboard `drone-konsol` generata da `crea_grafana.py` |
+| Pianta | `PAD2.step` letto senza librerie CAD, sezioni da 0,15 a 2,2 m, griglia di 10 cm |
+
+**Volo**
+
+| Parametro | Valore | Dove |
+| --- | --- | --- |
+| Quota di volo | 170 cm (sensore in basso) | `giro_punti.QUOTA_GIRO_CM` |
+| Velocità | 40 cm/s | `ispezione.VELOCITA` |
+| Distanza minima da pareti e pilastri | 0,5 m; il percorso preferisce stare a 1 m | `sito.MARGINE_OSTACOLI_M`, `mappa.DISTANZA_COMODA_M` |
+| Punti delle zone | almeno 1,2 m da pareti, pilastri, soppalchi e vetrate | `giro_punti.DISTANZA_DAI_MURI_M` |
+| Tratti senza sensore frontale | un `forward` per tratto, fino a 5 m | `ispezione.PASSO_MAX_CM` |
+| Tratti con sensore frontale | passi uguali di al massimo 1 m, spazio libero controllato prima di ognuno (40 cm di margine) | `ispezione.PASSO_CON_TOF_CM`, `DISTANZA_SICUREZZA_CM` |
+| Direzione prima di un tratto | entro 1 grado | `ispezione.TOLLERANZA_ROTTA_GRADI` |
+| Foto | 4, ogni 90 gradi (tolleranza 5 gradi); 0,5 s di attesa, poi il fotogramma più nitido in 1,2 s; correzione e salvataggio in un thread | `ATTESA_STABILIZZAZIONE_S`, `FINESTRA_FOTO_S` |
+| Ricerca del pad | a 80 cm, poi a 100 cm se non lo vede; allineamento con `go 0 0 80 25 m-2` | `QUOTA_PAD_CM`, `QUOTA_RICERCA_PAD_CM` |
+| Batteria | 40% per partire, 30% torna al pad, 20% atterra dove si trova | `BATTERIA_MINIMA_MISSIONE`, `BATTERIA_RITORNO`, `BATTERIA_MIN` |
+| Attesa delle risposte | durata prevista del comando + 5 s | `ispezione.MARGINE_RISPOSTA_S` |
+| Keepalive | un comando ogni 4 s di silenzio (il Tello atterra da solo dopo 15 s) | `ispezione.INTERVALLO_KEEPALIVE_S` |
+
+**Telecamere e centrale**
+
+| Parametro | Valore | Dove |
+| --- | --- | --- |
+| Allarme | macchia in movimento di almeno il 3% dell'immagine, ancora diversa dalla scena normale dopo 0,5 s (almeno l'1,5%) | `centrale.AREA_MINIMA`, `ATTESA_INGRESSO_S` |
+| Pausa dopo un allarme | 10 s per la stessa telecamera | `centrale.PAUSA_CAMERA_S` |
+| Priorità | gravità di Grok: alta 3, media 2, bassa 1; comando manuale 4 | `centrale.PRIORITA` |
+| Telemetria | ogni 2 s in volo, in `dashboard/logs/events.json` | `centrale.TELEMETRIA_S` |
+
+**Sistema di riferimento:** pianta in metri, x verso est e y verso nord, come in `PAD2.step`. Pad in (-0,75; 3,47) con il
+muso del drone a 180 gradi (ovest). Gli angoli sono antiorari da +x.
+
 ## Stato e limiti
 
 - **Provato sul drone vero il 5 novembre:** missioni complete verso ZONE_7, con 4 foto, ritorno e atterraggio sul pad e
   verdetto di Grok.
-- **Sensore frontale guasto** sul nostro Talent: si vola con `--senza-tof`, quindi gli ostacoli che non sono nella
-  pianta (persone, sedie, scaffali) non vengono visti.
+- **Ritorno al pad:** nei voli del 5 novembre il pad è stato trovato 2 volte su 6. Cause trovate nei registri: ricerca
+  del pad a una quota sbagliata (l'altezza `h` del Tello sbagliava di 50-90 cm), drone fermo sopra un oggetto vicino al
+  pad, risposta persa sull'ultimo tratto. Correzioni da fare.
+- **Senza sensore frontale** (`--senza-tof`) gli ostacoli che non sono nella pianta (persone, sedie, scaffali) non
+  vengono visti.
 - **Deriva:** in volo il drone non ha una posizione assoluta, quindi l'errore cresce con i metri percorsi. Il pad si
   ritrova solo all'arrivo. Per percorsi più lunghi servirebbero pad intermedi o marker ArUco.
 - **Luce:** in una sala buia le foto sono scure e rumorose; il programma le migliora poco, serve più luce.

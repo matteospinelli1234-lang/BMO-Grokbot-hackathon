@@ -2,6 +2,9 @@
 Genera grafana/dashboards/drone-konsol.json (la dashboard «Centrale drone» che Grafana carica da solo).
     python crea_grafana.py            scrive il file; poi  docker compose restart grafana  per caricarlo
     python crea_grafana.py --prova    prova prima ogni query su Loki (http://localhost:3100) e segnala gli errori
+    python crea_grafana.py --centrale 192.168.5.224:5000   indirizzo predefinito da cui Grafana prende le foto
+Le foto nelle tabelle arrivano da centrale.py: l'indirizzo è la variabile «centrale» della dashboard. La console
+(index.html) la imposta da sola con l'indirizzo da cui è aperta, quindi le foto si vedono anche dal telefono.
 Ogni pannello legge gli eventi di centrale.py (dashboard/logs/events.json -> Alloy -> Loki).
 """
 import json
@@ -13,6 +16,7 @@ import urllib.request
 DS = {"type": "loki", "uid": "loki"}
 F = '{job="drone", event="%s"}'
 pannelli = []
+CENTRALE = sys.argv[sys.argv.index("--centrale") + 1] if "--centrale" in sys.argv[:-1] else "localhost:5000"
 
 
 def conta(evento, filtro=""):
@@ -57,13 +61,13 @@ def righe(titolo, evento, formato, x, y, w, h, descrizione=""):
 
 
 def foto(titolo, evento, colonne, x, y, w, h):
-    """Tabella con l'immagine (servita da centrale.py su localhost:5000) e alcune colonne dell'evento."""
+    """Tabella con l'immagine (servita da centrale.py all'indirizzo della variabile 'centrale') e alcune colonne."""
     includi = {"Time": True, "Line": True, **{c: True for c in colonne}}
     nomi = {"Time": "Ora", "Line": "Foto", "target_zone": "Zona", "camera": "Telecamera", "lato": "Lato",
             "area_percento": "Area %", "luce": "Luce", "nitidezza": "Nitidezza"}
     pannelli.append({
         "type": "table", "title": titolo, "datasource": DS, "gridPos": {"x": x, "y": y, "w": w, "h": h},
-        "targets": [{"refId": "A", "expr": f'{F % evento} | json | line_format "http://localhost:5000/frames/{{{{.photo}}}}"'}],
+        "targets": [{"refId": "A", "expr": f'{F % evento} | json | line_format "http://${{centrale}}/frames/{{{{.photo}}}}"'}],
         "transformations": [
             {"id": "extractFields", "options": {"source": "labels", "format": "auto", "replace": False}},
             {"id": "organize", "options": {"includeByName": includi, "renameByName": nomi,
@@ -128,6 +132,9 @@ for i, p in enumerate(pannelli, 1):
     p["id"] = i
 dashboard = {"title": "Centrale drone", "uid": "drone-konsol", "time": {"from": "now-6h", "to": "now"},
              "refresh": "5s", "schemaVersion": 39, "timezone": "browser", "panels": pannelli,
+             "templating": {"list": [{"name": "centrale", "label": "Centrale (indirizzo:porta)", "type": "textbox",
+                                      "query": CENTRALE, "current": {"text": CENTRALE, "value": CENTRALE},
+                                      "options": [{"selected": True, "text": CENTRALE, "value": CENTRALE}]}]},
              "description": "Telecamere fisse, decisioni dell'operatore, voli, foto e verdetti di Grok (centrale.py)"}
 
 
@@ -136,7 +143,8 @@ def prova():
     errori = 0
     for p in pannelli:
         for t in p["targets"]:
-            espressione = t["expr"].replace("$__range", "6h").replace("$__interval", "1m")
+            espressione = (t["expr"].replace("$__range", "6h").replace("$__interval", "1m")
+                           .replace("${centrale}", CENTRALE))
             tipo = "query" if t.get("queryType") == "instant" else "query_range"
             url = f"http://localhost:3100/loki/api/v1/{tipo}?" + urllib.parse.urlencode(
                 {"query": espressione, "limit": 5, "since": "6h"} if tipo == "query_range" else {"query": espressione})

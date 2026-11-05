@@ -64,9 +64,9 @@ def a_terra_senza_urti(drone):
 def conta_foto(volo):
     scattate, originale = [], volo.foto
 
-    def foto(nome):
+    def foto(nome, **opzioni):
         scattate.append(nome)
-        return originale(nome)
+        return originale(nome, **opzioni)
 
     volo.foto = foto
     return scattate
@@ -354,9 +354,9 @@ def _():
     drone, volo, _ = giro_nuovo()
     direzioni, originale = [], volo.foto
 
-    def foto(nome):
+    def foto(nome, **opzioni):
         direzioni.append((round(drone.dir) % 360, round(drone.x, 2), round(drone.y, 2)))
-        return originale(nome)
+        return originale(nome, **opzioni)
 
     volo.foto = foto
     raggiunte = volo.esegui_giro([("CENTER", (0.0, 0.0))], scatta=True, quattro_lati=True)

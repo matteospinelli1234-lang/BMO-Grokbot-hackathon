@@ -869,7 +869,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "{job=\"drone\", event=\"camera_input\"} | json | line_format \"http://localhost:5000/frames/{{.photo}}\""
+     "expr": "{job=\"drone\", event=\"camera_input\"} | json | line_format \"http://${centrale}/frames/{{.photo}}\""
     }
    ],
    "transformations": [
@@ -966,7 +966,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "{job=\"drone\", event=\"drone_photo\"} | json | line_format \"http://localhost:5000/frames/{{.photo}}\""
+     "expr": "{job=\"drone\", event=\"drone_photo\"} | json | line_format \"http://${centrale}/frames/{{.photo}}\""
     }
    ],
    "transformations": [
@@ -1076,5 +1076,26 @@
    "id": 22
   }
  ],
+ "templating": {
+  "list": [
+   {
+    "name": "centrale",
+    "label": "Centrale (indirizzo:porta)",
+    "type": "textbox",
+    "query": "localhost:5000",
+    "current": {
+     "text": "localhost:5000",
+     "value": "localhost:5000"
+    },
+    "options": [
+     {
+      "selected": true,
+      "text": "localhost:5000",
+      "value": "localhost:5000"
+     }
+    ]
+   }
+  ]
+ },
  "description": "Telecamere fisse, decisioni dell'operatore, voli, foto e verdetti di Grok (centrale.py)"
 }
