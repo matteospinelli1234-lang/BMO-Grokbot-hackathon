@@ -153,3 +153,6 @@ logs/
 data/
 *.sqlite
 *.sqlite3
+
+.claude/
+graphify-out/
