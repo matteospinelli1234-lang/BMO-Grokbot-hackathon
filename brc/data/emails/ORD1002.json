@@ -1,0 +1,7 @@
+{
+  "order_id": "ORD1002",
+  "kind": "short",
+  "from": "acquisti@grande-distribuzione-nord.demo",
+  "subject": "Mancata consegna integrale ORD1002",
+  "body": "Buongiorno,\n\nrispetto all'ordine ORD1002 (Riso Arborio, 2000 kg) la bolla DES1002 e il lotto LOT-ARB-09 coprono 500 kg. Il saldo di 1500 kg non è in piattaforma.\n\nChiediamo la data del saldo oppure la conferma che fatturerete solo quanto spedito, lasciando il resto in backorder.\n\nUfficio acquisti\nGrande Distribuzione Nord"
+}

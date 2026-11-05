@@ -1,0 +1,10 @@
+{
+  "task": "dispute",
+  "order_id": "ORD1003",
+  "summary": "L'email chiede l'allineamento al contratto CTR-GDN-2026. ORD1003 e la clausola price-restrictions fissano 1,85 euro/kg; INV1003 espone 2,40 euro/kg su 2200 kg. DES1003 conferma che la quantità spedita è quella ordinata, quindi la contestazione è solo di prezzo. Proposta: nota di credito di 1210,00 euro sulla differenza, quantità invariata.",
+  "settlement": "credit_note",
+  "amount_eur": "1210.00",
+  "evidence_ids": ["ORD1003", "DES1003", "INV1003", "price-restrictions"],
+  "clause_ids": ["price-restrictions"],
+  "source": "offline-fixture"
+}

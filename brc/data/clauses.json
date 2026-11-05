@@ -1,0 +1,32 @@
+[
+  {
+    "id": "price-restrictions",
+    "tag": "price_restrictions",
+    "title": "Prezzo di fornitura",
+    "text": "Per la durata del contratto CTR-GDN-2026 il prezzo del riso è quello dell'allegato prezzi, in euro per chilogrammo, IVA esclusa. Il listino pubblico non si applica agli ordini di Grande Distribuzione Nord. Una fattura a un prezzo diverso si rettifica con nota di credito sulla differenza, senza modificare le quantità consegnate."
+  },
+  {
+    "id": "warranty",
+    "tag": "warranty",
+    "title": "Qualità del lotto",
+    "text": "Ogni spedizione è identificata da un lotto. Se il controllo qualità del lotto è negativo, o se il cliente contesta il chicco entro cinque giorni dalla consegna citando quel lotto, il fornitore ritira la partita contestata oppure emette nota di credito sull'importo della merce contestata. La scelta è del fornitore, dopo conferma di una persona quando lo storno non è automatico."
+  },
+  {
+    "id": "limitation-of-liability",
+    "tag": "limitation_of_liability",
+    "title": "Limite di responsabilità",
+    "text": "La responsabilità per una singola consegna non supera il prezzo della merce di quella consegna. Sono esclusi i danni indiretti, il mancato margine del distributore e le penali di scaffale non previste in questo contratto."
+  },
+  {
+    "id": "termination",
+    "tag": "termination",
+    "title": "Risoluzione",
+    "text": "Ciascuna parte può risolvere il contratto con preavviso di novanta giorni. Una contestazione su un ordine già accettato non risolve il contratto: si chiude con rettifica, riconsegna o nota di credito su quell'ordine."
+  },
+  {
+    "id": "governing-law",
+    "tag": "governing_law",
+    "title": "Legge e foro",
+    "text": "Il contratto è regolato dalla legge italiana. Foro di Milano, salvo le norme inderogabili a tutela del contraente."
+  }
+]

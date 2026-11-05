@@ -1,0 +1,9 @@
+{
+  "name": "matched",
+  "ordered_kg": "100.000",
+  "shipped_kg": "100.000",
+  "billed_kg": "100.000",
+  "contract_eur_per_kg": "1.85",
+  "invoice_eur_per_kg": "1.85",
+  "expect": "matched"
+}

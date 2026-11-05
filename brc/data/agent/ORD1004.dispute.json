@@ -1,0 +1,10 @@
+{
+  "task": "dispute",
+  "order_id": "ORD1004",
+  "summary": "L'email rifiuta il lotto LOT-ROM-441 citando DES1004. LOT-ROM-441-QC è già negativo per chicco rotto e gessato, e la clausola warranty prevede ritiro o nota di credito sulla merce contestata. Quantità e prezzo di INV1004 coincidono con ORD1004 (300 kg a 1,20 euro/kg, 360,00 euro). Proposta: nota di credito sull'intera riga. In alternativa, riconsegna di un lotto con QC positivo. Serve una persona.",
+  "settlement": "credit_note",
+  "amount_eur": "360.00",
+  "evidence_ids": ["ORD1004", "DES1004", "INV1004", "LOT-ROM-441-QC", "warranty"],
+  "clause_ids": ["warranty"],
+  "source": "offline-fixture"
+}

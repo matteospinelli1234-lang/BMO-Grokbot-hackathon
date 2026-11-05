@@ -1,0 +1,10 @@
+{
+  "task": "order",
+  "order_id": "ORD1002",
+  "summary": "L'ordine ORD1002 chiede 2000 kg di Riso Arborio. A magazzino, lotto LOT-ARB-09, ce ne sono 500 kg. Si spedisce quella quantità con DES1002 e si fattura solo quella con INV1002. Il saldo di 1500 kg resta in macinazione (evento ORD1002-MILLED) e non è ancora una bolla.",
+  "settlement": "backorder",
+  "amount_eur": "2400.00",
+  "evidence_ids": ["ORD1002", "DES1002", "INV1002", "ORD1002-ISSUED", "ORD1002-MILLED"],
+  "clause_ids": ["price-restrictions"],
+  "source": "offline-fixture"
+}

@@ -1,0 +1,65 @@
+{
+  "supplier": {
+    "name": "Riso Scotti (demo)",
+    "gln": "8001111000008",
+    "vat_country": "IT",
+    "vat": "00998877665",
+    "address": "Via Dimostrativa 1",
+    "cap": "20121",
+    "city": "Milano",
+    "province": "MI"
+  },
+  "buyer": {
+    "name": "Grande Distribuzione Nord S.p.A.",
+    "gln": "8002222000003",
+    "vat_country": "IT",
+    "vat": "00887766554",
+    "address": "Via del Mercato 10",
+    "cap": "10121",
+    "city": "Torino",
+    "province": "TO"
+  },
+  "contract_id": "CTR-GDN-2026",
+  "skus": [
+    {
+      "code": "CAR",
+      "gtin": "8001111000011",
+      "name": "Riso Carnaroli",
+      "contract_eur_per_kg": "1.85",
+      "list_eur_per_kg": "2.40",
+      "on_hand_kg": "8000.000",
+      "lot": "LOT-CAR-17",
+      "qc": "pass"
+    },
+    {
+      "code": "ARB",
+      "gtin": "8001111000028",
+      "name": "Riso Arborio",
+      "contract_eur_per_kg": "1.60",
+      "list_eur_per_kg": "1.95",
+      "on_hand_kg": "500.000",
+      "lot": "LOT-ARB-09",
+      "qc": "pass"
+    },
+    {
+      "code": "ROM",
+      "gtin": "8001111000035",
+      "name": "Riso Roma",
+      "contract_eur_per_kg": "1.20",
+      "list_eur_per_kg": "1.45",
+      "on_hand_kg": "2000.000",
+      "lot": "LOT-ROM-441",
+      "qc": "fail"
+    },
+    {
+      "code": "PAR",
+      "gtin": "8001111000042",
+      "name": "Riso parboiled",
+      "contract_eur_per_kg": "1.40",
+      "list_eur_per_kg": "1.70",
+      "on_hand_kg": "1500.000",
+      "lot": "LOT-PAR-02",
+      "qc": "pass"
+    }
+  ]
+}

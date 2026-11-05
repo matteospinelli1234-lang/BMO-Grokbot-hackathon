@@ -1,0 +1,30 @@
+[
+  {
+    "order_id": "ORD1001",
+    "kind": "clean",
+    "title": "Rifornimento Carnaroli sotto soglia",
+    "invoice_price": "contract",
+    "ship_despite_qc": false
+  },
+  {
+    "order_id": "ORD1002",
+    "kind": "short",
+    "title": "Consegna parziale Arborio",
+    "invoice_price": "contract",
+    "ship_despite_qc": false
+  },
+  {
+    "order_id": "ORD1003",
+    "kind": "price",
+    "title": "Prezzo di listino invece del contratto",
+    "invoice_price": "list",
+    "ship_despite_qc": false
+  },
+  {
+    "order_id": "ORD1004",
+    "kind": "quality",
+    "title": "Merce contestata, lotto Roma",
+    "invoice_price": "contract",
+    "ship_despite_qc": true
+  }
+]

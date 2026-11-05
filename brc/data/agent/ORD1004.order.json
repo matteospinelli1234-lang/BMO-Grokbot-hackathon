@@ -1,0 +1,10 @@
+{
+  "task": "order",
+  "order_id": "ORD1004",
+  "summary": "L'ordine ORD1004 chiede 300 kg di Riso Roma a 1,20 euro/kg. Il lotto LOT-ROM-441 ha un controllo qualità negativo (LOT-ROM-441-QC) ed è stato spedito lo stesso con DES1004. L'importo della riga è 360,00 euro, sotto soglia, ma lo storno qualità non si registra da solo.",
+  "settlement": "credit_note",
+  "amount_eur": "360.00",
+  "evidence_ids": ["ORD1004", "DES1004", "INV1004", "LOT-ROM-441-QC"],
+  "clause_ids": ["warranty"],
+  "source": "offline-fixture"
+}

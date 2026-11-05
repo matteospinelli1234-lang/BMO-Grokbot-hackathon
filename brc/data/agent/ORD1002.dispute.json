@@ -1,0 +1,10 @@
+{
+  "task": "dispute",
+  "order_id": "ORD1002",
+  "summary": "L'email contesta il saldo dell'ordine ORD1002. ORD1002 chiede 2000 kg, DES1002 e ORD1002-ISSUED ne certificano 500, INV1002 fattura 500 kg a prezzo di contratto. I 1500 kg mancanti sono l'evento ORD1002-MILLED, non una spedizione. Proposta: registrare la fattura parziale e tenere il resto in backorder, senza nota di credito.",
+  "settlement": "backorder",
+  "amount_eur": "2400.00",
+  "evidence_ids": ["ORD1002", "DES1002", "INV1002", "ORD1002-ISSUED", "ORD1002-MILLED"],
+  "clause_ids": ["limitation-of-liability"],
+  "source": "offline-fixture"
+}

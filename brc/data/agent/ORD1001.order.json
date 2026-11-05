@@ -1,0 +1,10 @@
+{
+  "task": "order",
+  "order_id": "ORD1001",
+  "summary": "L'ordine ORD1001 chiede 200 kg di Riso Carnaroli a 1,85 euro/kg. Il lotto LOT-CAR-17 è a magazzino con controllo qualità positivo. La bolla DES1001 e la fattura INV1001 coprono gli stessi 200 kg allo stesso prezzo. Importo 370,00 euro, sotto la soglia di 500 euro: si può registrare senza una persona.",
+  "settlement": "post",
+  "amount_eur": "370.00",
+  "evidence_ids": ["ORD1001", "DES1001", "INV1001", "LOT-CAR-17-QC", "ORD1001-ISSUED"],
+  "clause_ids": ["price-restrictions"],
+  "source": "offline-fixture"
+}
