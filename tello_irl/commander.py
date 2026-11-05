@@ -61,7 +61,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--sim",
         action="store_true",
-        help="Use the 3D simulator instead of the real drone",
+        help="Force the 3D simulator (no Wi-Fi needed)",
+    )
+    p.add_argument(
+        "--auto",
+        action="store_true",
+        help="Try real Tello, fall back to sim if Wi-Fi/connect fails (best for agents)",
     )
     p.add_argument("--no-visual", action="store_true", help="Sim without 3D map window")
     p.add_argument("--path", type=Path, default=DEFAULT_ZONES_PATH)
@@ -77,8 +82,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.sim:
+        mode = "sim"
+    elif args.auto:
+        mode = "auto"
+    else:
+        mode = "real"
     session = DroneSession(
-        mode="sim" if args.sim else "real",
+        mode=mode,
         zones_path=args.path,
         visual=not args.no_visual,
     )

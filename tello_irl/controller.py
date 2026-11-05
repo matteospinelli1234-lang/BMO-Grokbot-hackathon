@@ -82,17 +82,21 @@ class DroneSession:
         zones_path: Path | None = None,
         visual: bool = True,
         on_log: Callable[[str], None] | None = None,
+        tello_host: str | None = None,
     ) -> None:
-        if mode not in ("real", "sim"):
-            raise ValueError("mode must be 'real' or 'sim'")
+        if mode not in ("real", "sim", "auto"):
+            raise ValueError("mode must be 'real', 'sim', or 'auto'")
         self.mode = mode
         self.zones_path = zones_path or DEFAULT_ZONES_PATH
         self.visual = visual
         self.log = on_log or print
+        # Station / router mode: DHCP IP from the shared AP (default is AP-mode 192.168.10.1)
+        self.tello_host = tello_host
         self.zones: list[Zone] = build_pad2_zones(path=self.zones_path)
         self.tello: Any = None
         self.connected = False
         self.flying = False
+        self.backend = mode  # resolves to 'real' or 'sim' after connect()
         self.scripted_busy = threading.Event()
         self._abort = threading.Event()
         self._rc_lock = threading.Lock()
@@ -106,33 +110,51 @@ class DroneSession:
     def connect(self) -> None:
         if self.connected:
             return
-        if self.mode == "real":
-            from djitellopy import Tello
-
-            self.log("Connecting to Tello Talent (AP Wi-Fi)...")
-            t = Tello()
-            t.RESPONSE_TIMEOUT = 10
-            t.connect()
-            time.sleep(0.4)
-            bat = t.get_battery()
-            self.log(f"Connected. Battery: {bat}%")
-            if bat < 15:
-                raise RuntimeError(f"Battery {bat}% too low")
-            self.tello = t
+        if self.mode == "auto":
+            try:
+                self._connect_real()
+                self.backend = "real"
+            except Exception as exc:
+                self.log(f"Real Tello unavailable ({exc}) — falling back to simulator.")
+                self._connect_sim()
+                self.backend = "sim"
+                self.mode = "sim"  # status / pose paths treat this as sim
+        elif self.mode == "real":
+            self._connect_real()
+            self.backend = "real"
         else:
-            from tello_sim import SimulatedTello
-
-            self.log("Connecting to simulator...")
-            t = SimulatedTello(visual=self.visual)
-            t.connect()
-            self.log(f"Connected (sim). Battery: {t.get_battery()}%")
-            self.tello = t
-            snap = t.drone.snapshot()
-            self.x, self.y, self.z = snap["x"], snap["y"], snap["z"]
-            self.yaw = snap["yaw"]
+            self._connect_sim()
+            self.backend = "sim"
         self.connected = True
         self._abort.clear()
         self.last_zone = zone_at(self.x, self.y, self.z, self.zones)
+
+    def _connect_real(self) -> None:
+        from djitellopy import Tello
+
+        host = self.tello_host or "192.168.10.1"
+        self.log(f"Connecting to Tello Talent at {host}...")
+        t = Tello(host)
+        t.RESPONSE_TIMEOUT = 10
+        t.connect()
+        time.sleep(0.4)
+        bat = t.get_battery()
+        self.log(f"Connected. Battery: {bat}%")
+        if bat < 15:
+            raise RuntimeError(f"Battery {bat}% too low")
+        self.tello = t
+
+    def _connect_sim(self) -> None:
+        from tello_sim import SimulatedTello
+
+        self.log("Connecting to simulator...")
+        t = SimulatedTello(visual=self.visual)
+        t.connect()
+        self.log(f"Connected (sim). Battery: {t.get_battery()}%")
+        self.tello = t
+        snap = t.drone.snapshot()
+        self.x, self.y, self.z = snap["x"], snap["y"], snap["z"]
+        self.yaw = snap["yaw"]
 
     def close(self) -> None:
         self._abort.set()
@@ -169,7 +191,7 @@ class DroneSession:
         zn = zone_at(self.x, self.y, self.z, self.zones)
         self.last_zone = zn or self.last_zone
         return {
-            "mode": self.mode,
+            "mode": self.backend if self.connected else self.mode,
             "flying": self.flying,
             "x": self.x,
             "y": self.y,
@@ -316,6 +338,30 @@ class DroneSession:
         self.x += bx * c + by * s
         self.y += -bx * s + by * c
 
+    @staticmethod
+    def _yaw_toward_legs(current_yaw: float, target_yaw: float) -> tuple[list[tuple[str, int]], float]:
+        """Shortest rotate_cw/ccw so the nose faces target_yaw. Returns (legs, yaw_after).
+
+        Real Tello often rejects large single turns / bad IMU — chunk to ≤90°.
+        """
+        err = (target_yaw - current_yaw + 180.0) % 360.0 - 180.0
+        deg = int(round(abs(err)))
+        if deg < 5:
+            return [], current_yaw
+        legs: list[tuple[str, int]] = []
+        yaw = current_yaw
+        left = deg
+        while left > 0:
+            step = min(90, left)
+            if err >= 0:
+                legs.append(("rotate_cw", step))
+                yaw = (yaw + step) % 360.0
+            else:
+                legs.append(("rotate_ccw", step))
+                yaw = (yaw - step) % 360.0
+            left -= step
+        return legs, yaw
+
     def run_legs(self, legs: list[tuple[str, int]]) -> None:
         self._ensure()
         self.set_rc(0, 0, 0, 0, force=True)
@@ -337,9 +383,15 @@ class DroneSession:
         *,
         include_takeoff: bool = True,
         include_land: bool = False,
+        face: bool = True,
     ) -> list[tuple[str, int]]:
-        """Open-loop legs from estimated pose → goal (metres), body-aware."""
+        """Open-loop legs from estimated pose → goal (metres).
+
+        With ``face=True`` (default), yaw so the nose points at the goal, then
+        fly forward — same behaviour as the sim ``go_to_xyz(..., face=True)``.
+        """
         legs: list[tuple[str, int]] = []
+        yaw_plan = self.yaw
         if include_takeoff and not self.flying:
             legs.append(("takeoff", 0))
             z_after = max(self.z, 0.9)
@@ -350,22 +402,48 @@ class DroneSession:
         for cm in chunk_cm(dz_cm):
             legs.append(("move_up" if cm > 0 else "move_down", abs(cm)))
 
-        bx, by = world_delta_to_body(goal[0] - self.x, goal[1] - self.y, self.yaw)
-        for cm in chunk_cm(int(round(bx * 100))):
-            legs.append(("move_right" if cm > 0 else "move_left", abs(cm)))
-        for cm in chunk_cm(int(round(by * 100))):
-            legs.append(("move_forward" if cm > 0 else "move_back", abs(cm)))
+        dx = goal[0] - self.x
+        dy = goal[1] - self.y
+        dist_xy = math.hypot(dx, dy)
+
+        if dist_xy >= 0.20:
+            if face:
+                # yaw 0 = +Y, clockwise positive (matches sim / Tello RC)
+                target_yaw = math.degrees(math.atan2(dx, dy)) % 360.0
+                ylegs, yaw_plan = self._yaw_toward_legs(yaw_plan, target_yaw)
+                legs.extend(ylegs)
+                for cm in chunk_cm(int(round(dist_xy * 100))):
+                    legs.append(("move_forward", abs(cm)))
+            else:
+                bx, by = world_delta_to_body(dx, dy, yaw_plan)
+                for cm in chunk_cm(int(round(bx * 100))):
+                    legs.append(("move_right" if cm > 0 else "move_left", abs(cm)))
+                for cm in chunk_cm(int(round(by * 100))):
+                    legs.append(("move_forward" if cm > 0 else "move_back", abs(cm)))
 
         if include_land:
             legs.append(("land", 0))
         return legs
 
-    def go_to_zone(self, dest_name: str, *, land: bool = False) -> Zone:
+    def go_to_zone(self, dest_name: str, *, land: bool = False, face: bool = True) -> Zone:
         dest = resolve_zone(dest_name, self.zones)
         goal = dest.hover_point
-        legs = self.plan_to_point(goal, include_takeoff=True, include_land=land)
-        self.log(f"Open-loop go → {dest.id}  ({len(legs)} leg(s))")
-        self.run_legs(legs)
+        # On a real craft, prefer face+forward; if IMU is unhappy, caller can pass face=False
+        legs = self.plan_to_point(
+            goal, include_takeoff=True, include_land=land, face=face
+        )
+        self.log(f"Open-loop go → {dest.id}  ({len(legs)} leg(s), face={face})")
+        try:
+            self.run_legs(legs)
+        except Exception:
+            if face and self.backend == "real":
+                self.log("Face/yaw failed — retrying without yaw (strafe in body frame)")
+                legs = self.plan_to_point(
+                    goal, include_takeoff=False, include_land=land, face=False
+                )
+                self.run_legs(legs)
+            else:
+                raise
         self.last_zone = dest
         return dest
 
@@ -401,7 +479,7 @@ class DroneSession:
             self.soft_abort()
             return "Soft abort complete.\n" + self.status_line()
 
-        m = re.match(r"(?i)^move\s+(forward|back|left|right|up|down)\s+(\d+)\s*cm?$", low)
+        m = re.match(r"(?i)^move\s+(forward|back|left|right|up|down)\s+(\d+)\s*(?:cm)?$", low)
         if m:
             direction, cm_s = m.group(1), int(m.group(2))
             mapping = {

@@ -55,6 +55,15 @@ ALIASES: dict[str, str] = {
     "HOME": "HUB",
     "ORIGIN": "HUB",
     "SPAWN": "HUB",
+    "START": "HUB",
+    "BEGINNING": "HUB",
+    "BEGIN": "HUB",
+    "INIZIO": "HUB",
+    "PARTENZA": "HUB",
+    "AREA7": "ZONE_7",
+    "ZONA7": "ZONE_7",
+    "ZONE7": "ZONE_7",
+    "Z7": "ZONE_7",
 }
 
 
@@ -80,6 +89,14 @@ def resolve_zone(name: str, zones: list[Zone]) -> Zone:
     raw = name.strip()
     if not raw:
         raise ValueError("Empty zone name")
+    # "area 7" / "zona 7" / "zone_7" → ZONE_7 when present
+    m = re.match(r"(?i)^(?:area|zona|zone|z)\s*[_-]?\s*(\d+)$", raw.strip())
+    if m:
+        cand = f"ZONE_{m.group(1)}"
+        by_id = {z.id.upper(): z for z in zones}
+        if cand in by_id:
+            return by_id[cand]
+
     key = normalize_name(raw)
     compact = key.replace("_", "")
 

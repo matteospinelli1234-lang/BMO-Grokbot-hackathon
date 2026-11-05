@@ -112,6 +112,11 @@ flying in a 3D indoor simulator with furniture obstacles and a Tello-like API.
         python tello_irl_commander.py -c takeoff -c "go to NORTH" -c land
         API: from tello_irl import DroneSession
              session.execute("go to NORTH") / session.set_rc(...)
+      Cursor-as-pilot (NL in chat → drone), kill switch on the bridge:
+        python tello_agent_bridge.py --auto        # terminal 1 (keep open)
+        # In Cursor chat: "move from the beginning to area 7"
+        # Optional local NL console: python tello_nl_console.py
+        Bridge: http://127.0.0.1:8765  (/nl /exec /status /abort)
 
   Visuals:
     - Main view: chase camera (press C for orbit)
