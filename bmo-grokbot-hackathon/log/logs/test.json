@@ -1,2 +1,0 @@
-﻿{"event": "anomaly_detected", "camera": "cam_01", "type": "insan", "confidence": 0.87}
-{"event": "operator_decision", "camera": "cam_01", "decision": "send_drone", "response_sec": 12}
