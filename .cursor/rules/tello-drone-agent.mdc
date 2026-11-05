@@ -1,0 +1,62 @@
+---
+description: Cursor is the main NL controller for the Tello drone via the local agent bridge
+alwaysApply: true
+---
+
+# Tello drone agent control
+
+When the user asks (in natural language) to fly, move, take off, land, or check the drone, **you** are the main controller. Translate their intent into bridge calls. Keep the human kill switch sacred — never disable it.
+
+## Prerequisites
+
+A bridge should be running in a terminal:
+
+```bash
+python tello_agent_bridge.py --auto
+# or --sim if Tello Wi-Fi is unavailable
+```
+
+Base URL: `http://127.0.0.1:8765`
+
+## How to command the drone
+
+Prefer structured `/exec` after you resolve zones. Use `/nl` when helpful.
+
+```bash
+# status / zones
+curl -s http://127.0.0.1:8765/status
+curl -s http://127.0.0.1:8765/zones
+
+# natural language (bridge maps common phrases)
+curl -s http://127.0.0.1:8765/nl \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"move the drone from the beginning position to area 7"}'
+
+# explicit command (preferred once you know the zone id)
+curl -s http://127.0.0.1:8765/exec \
+  -H 'Content-Type: application/json' \
+  -d '{"cmd":"go to ZONE_7"}'
+
+# emergency soft stop + land in place
+curl -s -X POST http://127.0.0.1:8765/abort
+```
+
+Long flights: allow a long HTTP timeout (up to several minutes).
+
+## Zone language map
+
+| User says | Zone id |
+|-----------|---------|
+| beginning / start / home / hub / inizio | HUB |
+| area 7 / zona 7 / zone 7 | ZONE_7 |
+| north | NORTH_OPEN |
+| pad | PAD |
+| under mezz / mezz | UNDER_MEZZ / MEZZ_TOP |
+
+Always `GET /zones` if unsure. Confirm the mapped command briefly, then execute.
+
+## Safety
+
+- On user panic ("stop", "abort", "kill"): `POST /abort` immediately.
+- Do not call `emergency()` motor cut unless the user explicitly demands an instant drop.
+- Prefer `--auto` / sim when Wi-Fi to the Tello is down; tell the user which backend connected.
