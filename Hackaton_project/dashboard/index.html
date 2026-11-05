@@ -45,6 +45,15 @@
   .etichetta { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; margin: 4px 4px 0 0;
                background: #2a313b; }
   .etichetta.rossa { background: #5c1414; } .etichetta.verde { background: #14451c; } .etichetta.gialla { background: #4d3b00; }
+  .comando { display: flex; gap: 8px; margin-bottom: 8px; }
+  .comando input { flex: 1; min-width: 0; font: inherit; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--bordo);
+                   background: #12161b; color: var(--testo); }
+  #pending .carta.prima { border: 2px solid var(--blu); }
+  #pending .carta.prima::before { content: "Il comando vale per questo allarme (la zona la dà la telecamera)";
+                                  display: block; font-size: 12px; color: #8fb8ff; margin-bottom: 4px; }
+  .dialogo { font-size: 13px; margin-bottom: 10px; }
+  .dialogo .voce { border-left: 3px solid var(--blu); padding: 4px 8px; margin-bottom: 6px; background: #12161b; }
+  .dialogo .tu { color: var(--tenue); }
   #avvisi { position: fixed; top: 70px; right: 12px; z-index: 5; width: min(380px, calc(100vw - 24px)); display: grid; gap: 8px; }
   #avvisi:empty { display: none; }
   .avvisi-barra { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--tenue);
@@ -66,6 +75,12 @@
 <main>
   <section>
     <h2>Decisioni in attesa</h2>
+    <form id="riga-comando" class="comando" onsubmit="inviaComando(event)">
+      <input id="comando" autocomplete="off" enterkeyhint="send"
+             placeholder="Il drone parte? Scrivi «manda il drone», «no» oppure «decidi tu»">
+      <button id="invia" class="neutro">Invia</button>
+    </form>
+    <div id="dialogo" class="dialogo"></div>
     <div id="pending">...</div>
   </section>
   <section>
@@ -104,6 +119,7 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let finte = false, zoneCaricate = false;
+let primoAllarme = null;                 // l'allarme in cima alla lista: il comando scritto vale per questo
 const ultimo = {};                       // ridisegna una sezione solo se il contenuto cambia: i clic non si perdono
 function disegna(id, chiave, html) {
   if (ultimo[id] === chiave) return false;
@@ -143,6 +159,12 @@ async function aggiorna() {
     const s = await chiedi("/status");
     finte = s.finte;
     mostraAvvisi(s.avvisi || []);
+    disegna("dialogo", JSON.stringify(s.dialogo || []), () => (s.dialogo || []).map(d => `
+      <div class="voce">
+        <div class="tu">${esc(d.time.slice(11))} › ${esc(d.testo)}${d.allarme ? ` <i>(${esc(d.allarme)})</i>` : ""}</div>
+        <div><b>${esc(d.fonte)}:</b> ${esc(d.risposta)}</div>
+        ${d.azioni.length ? `<div class="tenue">Fatto: ${esc(d.azioni.join("; "))}</div>` : ""}
+      </div>`).join(""));
     const drone = s.bloccato ? "<b style='color:#ff6b6b'>BLOCCATO dopo l'emergenza</b>"
       : s.drone_busy ? `<b>In missione: ${esc(s.mission.target_zone)}</b> &middot; ${esc(s.fase)}`
       : "<b>Drone sul pad</b>";
@@ -194,6 +216,7 @@ async function aggiorna() {
           </figure>`).join("")}</div>`);
     }
     const p = await chiedi("/pending");
+    primoAllarme = p.length ? p[0].task_id : null;
     disegna("pending", JSON.stringify(p), () => p.length ? p.map(t => `
       <div class="carta">
         <b>${esc(t.camera)} &rarr; ${esc(t.target_zone)}</b> <span class="tenue">${esc(t.time.slice(11))}</span>
@@ -210,11 +233,8 @@ async function aggiorna() {
         <div>${esc((t.changes_detected || []).join("; "))}</div>
         <div class="tenue">${esc(t.reasoning)}</div>
         ${t.photo ? `<img src="/frames/${encodeURIComponent(t.photo)}" alt="allarme">` : ""}
-        <div class="riga">
-          <button class="si" onclick="decidi('${esc(t.task_id)}','yes')">Sì, manda il drone</button>
-          <button class="no" onclick="decidi('${esc(t.task_id)}','no')">No</button>
-        </div>
       </div>`).join("") : "<span class='tenue'>Nessuna decisione in attesa.</span>");
+    document.querySelectorAll("#pending .carta").forEach((carta, i) => carta.classList.toggle("prima", i === 0));
     const e = await chiedi("/eventi");
     $("eventi").textContent = e.map(r => {
       const {time, event, ...resto} = r;
@@ -226,7 +246,24 @@ async function aggiorna() {
 }
 
 setInterval(() => { $("mappa").src = "/mappa.png?t=" + Date.now(); }, 1500);
-async function decidi(id, scelta) { await chiedi("/decision", {task_id: id, decision: scelta}); aggiorna(); }
+async function inviaComando(ev) {
+  ev.preventDefault();
+  const campo = $("comando"), testo = campo.value.trim();
+  if (!testo) return;
+  campo.disabled = $("invia").disabled = true;
+  $("invia").textContent = "Grok pensa...";
+  try {
+    await chiedi("/comando", {testo, task_id: primoAllarme});
+    campo.value = "";
+  } catch (err) {
+    alert("Comando non inviato: " + err);
+  } finally {
+    campo.disabled = $("invia").disabled = false;
+    $("invia").textContent = "Invia";
+    campo.focus();
+    aggiorna();
+  }
+}
 async function vai() { await chiedi("/command", {target_zone: $("zona").value}); aggiorna(); }
 async function simula(id) { await chiedi("/simula", {camera_id: id}); }
 async function stop() { await chiedi("/stop", {}); aggiorna(); }

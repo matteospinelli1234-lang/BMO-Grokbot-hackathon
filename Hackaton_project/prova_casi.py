@@ -105,7 +105,7 @@ def _():
     return f"{avanti}, atterrato a {dal_pad(drone):.2f} m dal pad"
 
 
-@caso("ricerca del pad sopra un oggetto (ToF in basso 30 cm, h 80): quote prese da h, mai oltre 1,2 m")
+@caso("oggetto sotto il drone ovunque durante la ricerca del pad: 3 passi indietro, poi quote da h, mai oltre 1,2 m")
 def _():
     drone, volo, _ = giro_nuovo(usa_tof=False)
     originale = drone.get_current_state
@@ -121,6 +121,98 @@ def _():
     a_terra_senza_urti(drone)
     salite = [c for c in drone.comandi[drone.comandi.index("down 90"):] if c.startswith("up")]
     assert salite == ["up 20"], f"dopo la discesa a 80 cm: {salite} (doveva salire solo a 1 m)"
+    assert drone.comandi.count(f"back {isp.PASSO_INDIETRO_CM}") == isp.MAX_PASSI_INDIETRO, drone.comandi
+
+
+@caso("13:15 del 5/11: oggetto alto 1 m sul punto del pad: non scende lì, indietreggia sulla strada fatta, trova il pad")
+def _():
+    drone, volo, _ = giro_nuovo(usa_tof=False)
+    originale = drone.get_current_state
+    oggetto = (BASE[0] + 0.5, BASE[1])                             # treppiede alto 1 m, 0,5 m a est del pad
+    scese_sopra, spostato = [], []
+
+    def stato():
+        if volo.in_ritorno and not spostato:                      # errore di posizione: torna 0,5 m più a est
+            spostato.append(True)
+            drone.x += 0.5
+        s = dict(originale())
+        if drone.in_volo and math.dist((drone.x, drone.y), oggetto) < 0.25:
+            s["tof"] = max(10, s["h"] - 100)
+            if s["h"] < 140:
+                scese_sopra.append(s["h"])
+        return s
+
+    drone.get_current_state = stato
+    volo.esegui_giro([HUB], scatta=False)
+    a_terra_senza_urti(drone)
+    assert f"back {isp.PASSO_INDIETRO_CM}" in drone.comandi, "non è indietreggiato"
+    assert not scese_sopra, f"è sceso sopra l'oggetto fino a {min(scese_sopra)} cm"
+    assert volo.pad_visto and dal_pad(drone) < 0.3, f"pad visto {volo.pad_visto}, a {dal_pad(drone):.2f} m dal pad"
+
+
+@caso("12:45 del 5/11: h sbaglia di 60 cm: la ricerca del pad usa il ToF (tarato al decollo) e il pad si vede")
+def _():
+    drone, volo, _ = giro_nuovo(usa_tof=False)
+    originale = drone.get_current_state
+
+    def stato():
+        s = dict(originale())
+        s["h"] = s["h"] - 60 if drone.in_volo else s["h"]          # h più basso di 60 cm della quota vera
+        return s
+
+    drone.get_current_state = stato
+    volo.esegui_giro([HUB], scatta=False)
+    a_terra_senza_urti(drone)
+    assert volo.offset_h == 60, f"taratura al decollo: {volo.offset_h}"
+    assert volo.pad_visto and dal_pad(drone) < 0.3, f"pad visto {volo.pad_visto} (con h il pad era a 1,4 m: invisibile)"
+
+
+@caso("10:22 del 5/11: risposta persa all'ultimo tratto ma il drone si è mosso: tratto fatto, cerca il pad e ci atterra")
+def _():
+    drone, volo, _ = giro_nuovo(usa_tof=False)
+    originale, perse = drone.send_command_with_return, []
+
+    def comando(c, timeout=7):
+        risposta = originale(c, timeout)
+        if c.startswith("forward") and volo.in_ritorno and not perse:
+            perse.append(c)
+            return risposta_persa(c)                               # il drone si è mosso, l'ok si è perso
+        return risposta
+
+    drone.send_command_with_return = comando
+    volo.esegui_giro([ZONE_7], scatta=False)
+    a_terra_senza_urti(drone)
+    assert perse, "nessuna risposta persa simulata"
+    assert volo.ultimo_errore is None, f"il volo è finito in errore: {volo.ultimo_errore}"
+    assert volo.pad_visto and dal_pad(drone) < 0.3, f"pad visto {volo.pad_visto}, a {dal_pad(drone):.2f} m dal pad"
+
+
+@caso("discesa rifiutata durante la ricerca del pad: niente errore, atterra dove è; errori in volo registrati")
+def _():
+    drone, volo, _ = giro_nuovo(usa_tof=False)
+    originale = drone.send_command_with_return
+
+    def comando(c, timeout=7):
+        if c.startswith("down") and volo.fase.startswith("cerco il pad"):
+            return "error Not joystick"
+        return originale(c, timeout)
+
+    drone.send_command_with_return = comando
+    raggiunte = volo.esegui_giro([HUB], scatta=False)
+    a_terra_senza_urti(drone)
+    assert raggiunte and volo.ultimo_errore is None and volo.pad_visto is False, (raggiunte, volo.ultimo_errore)
+    drone2, volo2, _ = giro_nuovo(usa_tof=False)
+    quando(lontano_dal_pad(drone2, 1.0), lambda: setattr(drone2, "batteria", 15))
+    volo2.esegui_giro([ZONE_7], scatta=False)
+    assert volo2.ultimo_errore and "batteria" in volo2.ultimo_errore, f"errore non tenuto: {volo2.ultimo_errore}"
+
+
+@caso("'battery?' senza risposta (09:44 del 5/11): batteria letta dallo stato del drone")
+def _():
+    drone, volo, _ = giro_nuovo(usa_tof=False)
+    originale = drone.send_command_with_return
+    drone.send_command_with_return = lambda c, timeout=7: risposta_persa(c) if c == "battery?" else originale(c, timeout)
+    assert volo.batteria() == int(drone.batteria), "batteria non letta dallo stato"
 
 
 # ---------------- kill switch ----------------

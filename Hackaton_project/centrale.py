@@ -29,6 +29,7 @@ import math
 import heapq
 import itertools
 import json
+import re
 import sys
 import threading
 import time
@@ -48,7 +49,7 @@ import sito
 STREAM_URL = "http://192.168.5.133:8080/video"
 TELECAMERE = [
     {"id": "cam1", "nome": "Camera 1", "url": STREAM_URL, "zona": "NORTH_OPEN", "ruota": 0},
-    {"id": "cam2", "nome": "Camera 2", "url": "http://192.168.5.148:8080/video", "zona": "ZONE_7", "ruota": 0},
+    {"id": "cam2", "nome": "Camera 2", "url": "http://192.168.5.145:8080/video", "zona": "ZONE_7", "ruota": 0},
 ]
 CARTELLA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
 FRAMES = os.path.join(CARTELLA, "frames")
@@ -262,6 +263,48 @@ def descrivi_evento(client, fondo, allarme):
             "severity": severita if severita in PRIORITA else "medium", "grok_s": round(time.time() - inizio, 1)}
 
 
+# ---------------- comandi scritti dall'operatore ----------------
+# Il comando decide solo SE il drone parte per il primo allarme in attesa; dove va lo dice la telecamera dell'allarme.
+ESEMPI_COMANDI = "«manda il drone», «sì», «no, lascia stare», «decidi tu»"
+
+
+def interpreta_comando(client, testo, allarme):
+    """Grok legge il comando dell'operatore sull'allarme e risponde solo se il drone deve partire.
+    Restituisce {parti: True/False/None, risposta} (None = non ha capito) oppure None se Grok non risponde."""
+    istruzioni = (
+        "Sei l'assistente della centrale di sorveglianza di un capannone con un drone. Una telecamera fissa ha dato un "
+        "allarme; la zona dove andrebbe il drone è già decisa dalla telecamera. Devi solo capire dal comando "
+        "dell'operatore se il drone deve partire o no.\n"
+        f"Allarme (JSON): {json.dumps(allarme, ensure_ascii=False)}\n"
+        f"Comando dell'operatore: «{testo}»\n"
+        "Regole: parti=true se l'operatore vuole mandare il drone; parti=false se non lo vuole; se ti chiede di decidere "
+        "tu, parti=true solo se la tua analisi ha visto un'anomalia (anomalia_grok true) con gravità media o alta, "
+        "altrimenti false, e spiega perché; se il comando non è chiaro, parti=null e chiedi di riscriverlo.\n"
+        'Rispondi SOLO con un oggetto JSON: {"parti": true|false|null, "risposta": "una frase in italiano per '
+        'l\'operatore"}')
+    try:
+        risposta = client.chat.completions.create(model=isp.MODELLO_GROK, response_format={"type": "json_object"},
+                                                  messages=[{"role": "user", "content": istruzioni}])
+        r = json.loads(risposta.choices[0].message.content)
+    except Exception as e:
+        print("Comando: Grok non ha risposto, uso le parole chiave -", e)
+        return None
+    parti = r.get("parti")
+    return {"parti": parti if isinstance(parti, bool) else None, "risposta": str(r.get("risposta", ""))}
+
+
+def interpreta_semplice(testo):
+    """Senza Grok: parole chiave. Il no viene prima del sì: «non mandarlo» è un no."""
+    parole = set(re.findall(r"[a-zàèéìòù0-9_]+", testo.lower()))
+    if parole & {"no", "non", "ignora", "ignorare", "lascia", "niente", "annulla", "archivia"}:
+        return {"parti": False, "risposta": "Ok, il drone non parte."}
+    if parole & {"si", "sì", "manda", "mandalo", "mandare", "vai", "va", "ok", "parti", "controlla", "verifica"}:
+        return {"parti": True, "risposta": "Ok, il drone parte."}
+    if parole & {"decidi", "decidere", "scegli"}:
+        return {"parti": None, "risposta": "Senza Grok non posso decidere io: scrivi «manda» o «no»."}
+    return {"parti": None, "risposta": f"Non ho capito. Esempi: {ESEMPI_COMANDI}."}
+
+
 # ---------------- la centrale ----------------
 class Centrale:
     def __init__(self, telecamere, volo, drone, mappa, client=None, finte=False, cartella=CARTELLA):
@@ -280,6 +323,7 @@ class Centrale:
         self._mappa_cache = (0.0, None)
         self.telemetria = {}
         self.avvisi, self.contatore_avvisi = [], itertools.count(1)   # notifiche per la dashboard (anomalie di Grok)
+        self.dialogo = []                                    # comandi scritti dall'operatore e risposte
         volo.cartella_foto = self.frames
 
     # --- registro eventi (stesso formato di webhook.py: una riga JSON con time ed event) ---
@@ -448,6 +492,52 @@ class Centrale:
                 return {"status": "rejected"}, 200
             return {"status": self._metti_in_coda(compito)}, 200
 
+    def comando_testo(self, testo, task_id=None):
+        """Comando scritto dall'operatore nella dashboard per il primo allarme in attesa (il più importante, poi il più
+        vecchio): Grok (o le parole chiave) dice solo se il drone parte. La zona è quella della telecamera.
+        task_id: l'allarme che l'operatore vedeva in cima alla lista quando ha scritto. Se nel frattempo è già stato
+        deciso non si fa niente, invece di applicare il comando a un altro allarme (e mandare il drone altrove)."""
+        testo = str(testo or "").strip()[:500]
+        if not testo:
+            return {"error": "comando vuoto"}, 400
+        attesa = self.in_attesa()
+        if task_id:
+            attesa = [a for a in attesa if a["task_id"] == task_id]
+        if not attesa:
+            risposta = ("Quell'allarme è già stato deciso: guarda la lista e riscrivi." if task_id
+                        else "Non c'è nessun allarme in attesa.")
+            voce = {"time": adesso(), "testo": testo, "risposta": risposta, "azioni": [], "fonte": "centrale"}
+        else:
+            a = attesa[0]
+            piano, fonte = None, "parole chiave"
+            if self.client is not None:
+                allarme = {"telecamera": a.get("camera"), "zona": a["target_zone"], "ora": a.get("time", "")[11:],
+                           "area_percento": a.get("area_percento"), "anomalia_grok": a.get("grok_deviation"),
+                           "gravita": a.get("severity"), "cambiamenti": a.get("changes_detected"),
+                           "spiegazione_grok": a.get("reasoning")}
+                piano = interpreta_comando(self.client, testo, allarme)
+                fonte = "Grok" if piano is not None else fonte
+            if piano is None:
+                piano = interpreta_semplice(testo)
+            chi = f"{a.get('camera')} -> {a['target_zone']}"
+            azioni = []
+            if piano["parti"] is not None:                   # mentre Grok pensava qualcuno può averlo già deciso
+                corpo, codice = self.decisione(a["task_id"], "yes" if piano["parti"] else "no")
+                if codice != 200:
+                    azioni.append(f"allarme {chi} già deciso da qualcun altro: niente fatto")
+                elif piano["parti"]:
+                    azioni.append(f"drone mandato: {chi} ({corpo.get('status')})")
+                else:
+                    azioni.append(f"allarme archiviato: {chi}")
+            voce = {"time": adesso(), "testo": testo, "risposta": piano.get("risposta", ""), "azioni": azioni,
+                    "fonte": fonte, "allarme": chi}
+        with self.lock:
+            self.dialogo.append(voce)
+            del self.dialogo[:-20]
+        self.evento("operator_command", testo=testo, fonte=voce["fonte"], risposta=voce["risposta"],
+                    azioni="; ".join(voce["azioni"]) or "nessuna")
+        return voce, 200
+
     def comando(self, zona):
         if zona not in zone_ids():
             return {"error": f"zona sconosciuta: {zona}"}, 400
@@ -514,6 +604,8 @@ class Centrale:
         inizio = time.time()
         raggiunte = self.volo.esegui_giro([(zona, punto)], scatta=True, quattro_lati=True)
         durata = time.time() - inizio
+        if self.volo.ultimo_errore:                          # errore in volo (il drone è già atterrato dove era)
+            self.evento("mission_error", task_id=tid, target_zone=zona, errore=self.volo.ultimo_errore)
         foto = [f for f in glob.glob(os.path.join(self.frames, f"*_tappa1_{isp.nome_file(zona)}_*.jpg"))
                 if os.path.getmtime(f) >= inizio - 1]
         foto = [(os.path.splitext(f)[0].rsplit("_", 1)[1], f) for f in sorted(foto)]
@@ -592,7 +684,7 @@ class Centrale:
                 "telecamere": [{"id": c["id"], "nome": c["nome"], "zona": c["zona"], "stato": c["stato"]}
                                for c in self.telecamere.values()],
                 "zone": zone_ids(), "ultime_missioni": self.ultime_missioni[:5],
-                "avvisi": list(reversed(self.avvisi[-10:]))}
+                "avvisi": list(reversed(self.avvisi[-10:])), "dialogo": list(reversed(self.dialogo[-6:]))}
 
     def in_attesa(self):
         with self.lock:
@@ -704,6 +796,8 @@ def crea_server(centrale, host="127.0.0.1", porta=5000):
                 corpo, codice = centrale.decisione(dati.get("task_id"), dati.get("decision"))
             elif percorso == "/command":
                 corpo, codice = centrale.comando(str(dati.get("target_zone", "")))
+            elif percorso == "/comando":                     # riga di comando della dashboard (testo libero)
+                corpo, codice = centrale.comando_testo(dati.get("testo", ""), dati.get("task_id"))
             elif percorso == "/stop":
                 centrale.stop()
                 corpo, codice = {"status": "atterraggio"}, 200

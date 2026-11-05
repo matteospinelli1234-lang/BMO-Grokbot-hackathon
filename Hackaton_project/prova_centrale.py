@@ -6,6 +6,7 @@ finto, dashboard vera su una porta libera, comandata via HTTP come farebbe il br
 import json
 import math
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -30,8 +31,13 @@ class GrokFinto:
         self.chat = self.completions = self
 
     def create(self, **argomenti):
-        testo = argomenti["messages"][0]["content"][0]["text"]
-        if "agente di sicurezza" in testo:
+        contenuto = argomenti["messages"][0]["content"]
+        testo = contenuto if isinstance(contenuto, str) else contenuto[0]["text"]
+        if "Comando dell'operatore" in testo:                # riga di comando: parte se Grok ha visto l'anomalia
+            self.chiamate.append("comando")
+            parti = '"anomalia_grok": true' in testo
+            r = {"parti": parti, "risposta": "Ho visto un'anomalia: il drone parte." if parti else "Niente: resta fermo."}
+        elif "agente di sicurezza" in testo:
             self.chiamate.append("evento")
             r = {"deviation_detected": True, "changes_detected": ["persona in piedi"], "reasoning": "prova",
                  "severity": "high"}
@@ -209,6 +215,47 @@ def _():
     assert [x["zona"] for x in camere] == [c.TELECAMERE[0]["zona"], "CENTER"], camere
     camere = c.configura_telecamere(lambda _: "", file)
     assert camere[1]["zona"] == "CENTER", "scelta non ricordata"
+
+
+@caso("riga di comando: senza Grok «no» archivia e «manda» fa partire il drone; con «decidi tu» decide Grok")
+def _():
+    centrale, server, drone, base = nuova_centrale(None)
+    try:
+        assert aspetta(lambda: all(t["stato"] == "online" for t in chiedi(base, "/status")["telecamere"]), 10)
+        time.sleep(c.RISCALDAMENTO_S + 0.5)
+        chiedi(base, "/simula", {"camera_id": "cam2"})
+        assert aspetta(lambda: chiedi(base, "/pending"), 10), "allarme non arrivato"
+        vecchio = chiedi(base, "/pending")[0]["task_id"]
+        r = chiedi(base, "/comando", {"testo": "no, lascia stare", "task_id": vecchio})
+        assert r["azioni"] and "archiviato" in r["azioni"][0] and not chiedi(base, "/pending"), r
+        r = chiedi(base, "/comando", {"testo": "manda il drone", "task_id": vecchio})   # allarme già deciso
+        assert not r["azioni"] and "già stato deciso" in r["risposta"], r
+        assert "takeoff" not in drone.comandi, "è decollato dopo un no scritto"
+        chiedi(base, "/simula", {"camera_id": "cam1"})            # altra telecamera: nessuna pausa
+        assert aspetta(lambda: chiedi(base, "/pending"), 10), "secondo allarme non arrivato"
+        r = chiedi(base, "/comando", {"testo": "manda il drone per la camera 1"})
+        assert r["azioni"] and "drone mandato" in r["azioni"][0], r
+        assert aspetta(lambda: chiedi(base, "/status")["drone_busy"], 10), "il drone non è partito"
+        assert chiedi(base, "/status")["dialogo"][0]["testo"] == "manda il drone per la camera 1"
+    finally:
+        centrale.chiudi()
+    grok = GrokFinto()
+    centrale, server, drone, base = nuova_centrale(grok)
+    try:
+        assert aspetta(lambda: all(t["stato"] == "online" for t in chiedi(base, "/status")["telecamere"]), 10)
+        time.sleep(c.RISCALDAMENTO_S + 0.5)
+        chiedi(base, "/simula", {"camera_id": "cam2"})
+        assert aspetta(lambda: chiedi(base, "/pending"), 10), "allarme non arrivato"
+        assert aspetta(lambda: chiedi(base, "/pending")[0]["severity"] == "high", 5), "analisi di Grok mancante"
+        r = chiedi(base, "/comando", {"testo": "decidi tu"})
+        assert r["fonte"] == "Grok" and r["azioni"] and "drone mandato" in r["azioni"][0], r
+        assert "comando" in grok.chiamate
+        assert aspetta(lambda: chiedi(base, "/status")["drone_busy"], 10), "il drone non è partito"
+        with open(centrale.file_eventi, encoding="utf-8") as f:
+            assert any(json.loads(riga)["event"] == "operator_command" for riga in f), "comando non registrato"
+        return "parole chiave e Grok ok"
+    finally:
+        centrale.chiudi()
 
 
 if __name__ == "__main__":

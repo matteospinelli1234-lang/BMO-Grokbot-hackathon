@@ -74,6 +74,10 @@ QUOTA_PAD_CM = 80               # il pad si vede solo tra 0,3 e 1,2 m: si scende
 QUOTA_RICERCA_PAD_CM = 100      # più in alto il pad si vede in un'area più larga; h del Tello sbaglia di 10-20 cm,
                                 # quindi non 120
 ATTESA_PAD_S = 2.0
+OGGETTO_SOTTO_CM = 35           # ToF in basso più corto di così rispetto al pavimento atteso: sotto c'è un oggetto
+PASSO_INDIETRO_CM = 40          # con un oggetto sotto il punto del pad si indietreggia sulla strada fatta...
+MAX_PASSI_INDIETRO = 3          # ...al massimo 3 volte (1,2 m)
+MOSSO_SE_FATTO = 0.5            # risposta persa a un 'forward': fatto se le velocità dello stato danno almeno metà
 MODELLO_GROK = "grok-4.5"           # misurato il 4 novembre: circa 8 s per domanda in volo (grok-4.7 molto più lento)
 TIMEOUT_GROK_S = 20             # in volo: oltre, si prosegue come senza Grok (il drone non resta sospeso)
 # se la risposta a questi comandi si perde (Wi-Fi, 5 novembre) si rimisura quota o direzione dallo stato e si continua
@@ -252,6 +256,8 @@ class Ispezione:
         self.lettore = None
         self.ultima_foto = None
         self._salvataggi, self._in_salvataggio = None, []    # foto corrette e scritte in un thread
+        self.offset_h = None                                 # ToF - h sopra il pad dopo il decollo (_decolla)
+        self.ultimo_errore = None                            # ultimo errore in volo, per centrale.py
         threading.Thread(target=self._keepalive, daemon=True).start()
 
     # --- registro e fasi ---
@@ -389,7 +395,17 @@ class Ispezione:
         raise RuntimeError(f"Risposta non valida a {testo!r}: {ultima!r}")
 
     def batteria(self):
-        return int(self.leggi("battery?", lambda r: r.isdigit()))
+        """Batteria in %: risposta a 'battery?' (che fa anche da keepalive); se si perde nel Wi-Fi, il valore 'bat' che
+        il Tello manda da solo nello stato. Il 5 novembre alle 09:44 e 09:45 due missioni sono state annullate perché
+        'battery?' non aveva risposto."""
+        try:
+            return int(self.leggi("battery?", lambda r: r.isdigit()))
+        except RuntimeError:
+            bat = self.stato().get("bat")
+            if isinstance(bat, int) and 0 < bat <= 100:
+                print(f"  'battery?' senza risposta: uso la batteria dello stato ({bat}%)")
+                return bat
+            raise
 
     # --- kill switch (giro_punti.py) ---
     def atterra_subito(self):
@@ -466,11 +482,38 @@ class Ispezione:
                 fatte += 1                                   # risposta persa: non conta, si rimisura lo yaw
 
     def avanza(self, cm, pausa_s=PAUSA_YAW_S):
+        """'forward cm' lungo la direzione misurata. Intanto un thread somma le velocità dello stato (vgx, vgy in dm/s):
+        poco precise per misurare la strada, ma bastano a capire se il drone si è mosso. Se la risposta si perde nel
+        Wi-Fi e il drone ha fatto almeno MOSSO_SE_FATTO del tratto, il tratto conta come fatto e il volo continua
+        (5 novembre, 10:22: l'ok dell'ultimo tratto si è perso, il drone era arrivato sopra il pad ma è atterrato senza
+        cercarlo e la posizione stimata è tornata all'inizio del tratto)."""
         a = math.radians(self.direzione(pausa_s))
         self.avanzamento = (a, cm, time.time())              # per la posizione dal vivo in dashboard
+        mosso, fine = [0.0], threading.Event()
+
+        def misura():
+            prima = time.time()
+            while not fine.wait(0.05):
+                try:
+                    s = self.stato()
+                    v = math.hypot(s.get("vgx") or 0, s.get("vgy") or 0) * 10      # cm/s
+                except Exception:
+                    v = 0.0
+                ora = time.time()
+                mosso[0] += v * (ora - prima)
+                prima = ora
+
+        threading.Thread(target=misura, daemon=True).start()
         try:
             self.esegui(f"forward {int(cm)}")
+        except RispostaPersa:
+            if mosso[0] < MOSSO_SE_FATTO * cm:
+                raise
+            print(f"  Risposta persa, ma dallo stato il drone si è mosso di circa {mosso[0]:.0f} cm: tratto fatto")
+            self.registra("misura", "risposta_persa_tratto_fatto", comando=f"forward {int(cm)}",
+                          mosso_cm=round(mosso[0]))
         finally:
+            fine.set()
             self.avanzamento = None
         self.x += cm * math.cos(a)
         self.y += cm * math.sin(a)
@@ -622,19 +665,26 @@ class Ispezione:
 
     def allinea_pad(self):
         """Sopra la posizione stimata del pad: lo cerca; se non lo vede sale (area di ricerca più larga) e riprova.
-        Niente spostamenti laterali alla cieca: dietro il pad c'è il telefono.
-        Le quote qui sono h, l'altezza sul punto di decollo (il pavimento del pad), non il ToF in basso: il 5 novembre
-        alle 09:49 il drone era sopra un oggetto (h 70, ToF 29), il ToF ha detto 51 cm, è salito di 59 fino a 1,4 m e
-        da lì il pad non si vede più."""
+        Le quote sono dal pavimento (_sotto): il ToF in basso se sotto c'è il pavimento, altrimenti h tarato al decollo.
+        5 novembre: alle 12:47 h sbagliava di 87 cm (a «80 cm» il ToF diceva 167: pad invisibile); alle 09:49 e alle
+        13:15 sotto il punto del pad c'era un oggetto alto circa 1 m, la discesa è stata rifiutata e il drone ci è
+        atterrato sopra. Ora con un oggetto sotto il drone indietreggia sulla strada fatta prima di scendere, e una
+        discesa rifiutata non chiude la missione: niente pad, si atterra dove il pavimento è libero."""
         self.cambia_fase("cerco il pad")
         self.pad_visto = False
+        self._via_dagli_oggetti()
         self.ruota_verso(0)
-        self.porta_a_quota(QUOTA_PAD_CM, dal_decollo=True)
-        pad = self._cerca_pad()
-        if pad is None:
-            self.cambia_fase("pad non visto: salgo per vedere un'area più larga")
-            self.porta_a_quota(QUOTA_RICERCA_PAD_CM, dal_decollo=True)
+        try:
+            self.porta_a_quota(QUOTA_PAD_CM, sul_pavimento=True)
             pad = self._cerca_pad()
+            if pad is None:
+                self.cambia_fase("pad non visto: salgo per vedere un'area più larga")
+                self.porta_a_quota(QUOTA_RICERCA_PAD_CM, sul_pavimento=True)
+                pad = self._cerca_pad()
+        except RuntimeError as e:                            # es. 'down' rifiutato: niente pad, si atterra qui
+            print("Discesa per cercare il pad non riuscita:", e)
+            self.registra("misura", "pad_discesa_non_riuscita", errore=str(e))
+            pad = None
         stato = self.stato()
         diagnosi = {"mid": stato.get("mid"), "altezza_h_cm": stato.get("h"), "tof_basso_cm": stato.get("tof")}
         if pad is None:
@@ -648,10 +698,44 @@ class Ispezione:
         except RuntimeError as e:
             print("Allineamento sul pad non riuscito:", e)
 
-    def porta_a_quota(self, obiettivo_cm, dal_decollo=False):
-        """dal_decollo: misura con h (altezza sul punto di decollo) invece che con il ToF in basso."""
+    def _sotto(self):
+        """(quota dal pavimento in cm, oggetto sotto True/False). h tarato al decollo (offset_h = ToF - h sopra il pad)
+        dice a che distanza dovrebbe essere il pavimento: se il ToF in basso legge molto meno, sotto c'è un oggetto e la
+        quota dal pavimento è quella di h tarato; altrimenti è il ToF, più preciso di h (che deriva di decine di cm)."""
+        s = self.stato()
+        h, tof = s.get("h"), s.get("tof")
+        tof_ok = isinstance(tof, (int, float)) and 10 < tof < 400        # 6553 e simili: lettura non valida
+        atteso = h + (self.offset_h or 0) if isinstance(h, (int, float)) else None
+        if tof_ok and (atteso is None or tof >= atteso - OGGETTO_SOTTO_CM):
+            return tof, False
+        return (atteso if atteso is not None else QUOTA_PAD_CM), tof_ok
+
+    def _via_dagli_oggetti(self):
+        """Se sotto il drone c'è un oggetto (treppiede, tavolo...) indietreggia sulla strada appena fatta, che passava
+        sul pavimento libero, a passi di PASSO_INDIETRO_CM. Restituisce True se sotto c'è il pavimento."""
+        for i in range(MAX_PASSI_INDIETRO):
+            quota, oggetto = self._sotto()
+            if not oggetto:
+                return True
+            tof = self.stato().get("tof")
+            print(f"  Sotto il drone c'è un oggetto (ToF {tof} cm, pavimento a circa {quota:.0f} cm): "
+                  f"indietreggio di {PASSO_INDIETRO_CM} cm")
+            self.registra("misura", "oggetto_sotto", passo=i + 1, tof_basso_cm=tof, pavimento_cm=round(quota))
+            a = math.radians(self.direzione())
+            self.esegui(f"back {PASSO_INDIETRO_CM}")
+            self.x -= PASSO_INDIETRO_CM * math.cos(a)
+            self.y -= PASSO_INDIETRO_CM * math.sin(a)
+            self._segna_traccia()
+        libero = not self._sotto()[1]
+        if not libero:
+            self.registra("misura", "oggetto_sotto_non_superato")
+        return libero
+
+    def porta_a_quota(self, obiettivo_cm, sul_pavimento=False):
+        """sul_pavimento: quota misurata con _sotto (ToF se sotto c'è il pavimento, h tarato se c'è un oggetto);
+        altrimenti quota_cm (ToF in basso, usata al decollo sopra il pad)."""
         for _ in range(4):
-            attuale = self.stato().get("h", obiettivo_cm) if dal_decollo else self.quota_cm()
+            attuale = self._sotto()[0] if sul_pavimento else self.quota_cm()
             differenza = obiettivo_cm - attuale
             if abs(differenza) < PASSO_MIN_CM:
                 return
@@ -829,6 +913,8 @@ class Ispezione:
         self.tracce = [(0.0, 0.0)]
         self.persona, self.percorso_mappa, self.zona = None, None, None
         self.pad_visto = None
+        self.offset_h = None                                 # ToF - h sopra il pad dopo il decollo (_decolla)
+        self.ultimo_errore = None
 
     def _decolla(self):
         self.cambia_fase("decollo")
@@ -841,21 +927,32 @@ class Ispezione:
         self.esegui(f"speed {VELOCITA}")
         self.porta_a_quota(self.quota_volo_cm)
         time.sleep(PAUSA_YAW_S)
-        self.yaw0 = self.stato()["yaw"]
+        stato = self.stato()
+        self.yaw0 = stato["yaw"]
+        h, tof = stato.get("h"), stato.get("tof")             # sopra il pad c'è il pavimento: taratura di h
+        if isinstance(h, (int, float)) and isinstance(tof, (int, float)) and 10 < tof < 400:
+            self.offset_h = tof - h
+            self.registra("misura", "taratura_quota", h_cm=h, tof_basso_cm=tof, offset_cm=self.offset_h)
 
     def _rientra(self):
         self.in_ritorno = True
         self.ritorna()
         self.allinea_pad()
 
-    @staticmethod
-    def _errore_in_volo(e):
+    def _errore_in_volo(self, e):
+        """Stampa l'errore, lo scrive nel registro e lo tiene in ultimo_errore (centrale.py lo mette negli eventi):
+        il 5 novembre gli errori erano solo stampati e non si potevano più ricostruire."""
         if isinstance(e, Interruzione):
             print("Interruzione: atterro dove sono -", e)
         elif isinstance(e, Bloccato):
             print("Percorso bloccato: atterro dove sono -", e)
         else:
             print("Errore durante il volo:", e)
+        self.ultimo_errore = f"{type(e).__name__}: {e}"
+        try:
+            self.registra("misura", "errore_in_volo", tipo=type(e).__name__, errore=str(e), fase=self.fase)
+        except Exception as altro:
+            print("Errore non registrato:", altro)
 
     def _atterra_e_chiudi(self, pianta_pulita):
         self.cambia_fase("atterraggio")
