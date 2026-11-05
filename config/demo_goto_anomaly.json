@@ -1,0 +1,12 @@
+{
+  "mission_id": "goto-demo-001",
+  "type": "goto_anomaly",
+  "priority": 1,
+  "room": "sala-2",
+  "target": {"x": 1.2, "y": 0.4, "z": 1.0, "label": "zona-anomalia"},
+  "source_event_id": "evt-demo-1",
+  "capture": {"on_arrive": true, "n_frames": 3},
+  "mode": "sim",
+  "issued_by": "Judge",
+  "ts": "2026-11-04T11:05:00Z"
+}

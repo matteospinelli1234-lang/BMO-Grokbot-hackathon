@@ -1,0 +1,27 @@
+# sala-2 demo room. Coordinates are meters in the room frame:
+# +x forward at yaw 0, +y right, +z up, yaw degrees clockwise.
+# Copy these into a BOSS mission JSON. The flight path reads the JSON.
+room: sala-2
+frame: meters
+waypoints:
+  - id: wp1
+    x: 0.0
+    y: 0.0
+    z: 1.0
+    yaw: 0
+  - id: wp2
+    x: 0.8
+    y: 0.0
+    z: 1.0
+    yaw: 0
+  - id: wp3
+    x: 0.8
+    y: 0.6
+    z: 1.0
+    yaw: 90
+zones:
+  zona-anomalia:
+    x: 1.2
+    y: 0.4
+    z: 1.0
+    label: zona-anomalia

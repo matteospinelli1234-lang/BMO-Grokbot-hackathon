@@ -153,3 +153,6 @@ logs/
 data/
 *.sqlite
 *.sqlite3
+
+# Scout shared-box runtime: mission frames and status.json
+/drone-patrol/

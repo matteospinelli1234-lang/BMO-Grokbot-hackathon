@@ -1,0 +1,16 @@
+{
+  "mission_id": "patrol-demo-001",
+  "type": "patrol",
+  "priority": 3,
+  "room": "sala-2",
+  "waypoints": [
+    {"id": "wp1", "x": 0.0, "y": 0.0, "z": 1.0, "yaw": 0},
+    {"id": "wp2", "x": 0.8, "y": 0.0, "z": 1.0, "yaw": 0},
+    {"id": "wp3", "x": 0.8, "y": 0.6, "z": 1.0, "yaw": 90}
+  ],
+  "source_event_id": null,
+  "capture": {"on_arrive": true, "n_frames": 1},
+  "mode": "sim",
+  "issued_by": "Console",
+  "ts": "2026-11-04T11:00:00Z"
+}
