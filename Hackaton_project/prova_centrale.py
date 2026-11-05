@@ -117,6 +117,9 @@ def _():
         m = stato["ultime_missioni"][0]
         assert sorted(f["lato"] for f in m["foto"]) == ["est", "nord", "ovest", "sud"], m["foto"]
         assert m["verdetto"]["esito"] == "ANOMALY DETECTED", m["verdetto"]
+        tipi = [a["tipo"] for a in chiedi(base, "/status")["avvisi"]]
+        assert "grok_anomalia" in tipi and "anomalia_confermata" in tipi, f"avvisi per l'anomalia mancanti: {tipi}"
+        assert b"mostraAvvisi" in chiedi(base, "/"), "la dashboard non mostra gli avvisi"
         assert math.dist((drone.x, drone.y), c.BASE[:2]) < 0.3 and not drone.in_volo, "non è tornato sul pad"
         assert not drone.urti, f"urti {drone.urti}"
         with open(centrale.file_eventi, encoding="utf-8") as f:
@@ -130,6 +133,29 @@ def _():
     finally:
         centrale.chiudi()
         server.shutdown()
+
+
+@caso("FALSO ALLARME di Grok: avviso solo se Grok ha visto l'anomalia all'allarme, mai «confermata»")
+def _():
+    grok = GrokFinto(verdetto="FALSO ALLARME")
+    centrale, server, drone, base = nuova_centrale(grok)
+    try:
+        assert aspetta(lambda: all(t["stato"] == "online" for t in chiedi(base, "/status")["telecamere"]), 10), \
+            "telecamere non online"
+        time.sleep(c.RISCALDAMENTO_S + 0.5)
+        chiedi(base, "/simula", {"camera_id": "cam2"})
+        attesa = aspetta(lambda: chiedi(base, "/pending"), 10)
+        assert attesa and aspetta(lambda: chiedi(base, "/pending")[0]["severity"] == "high", 5), "allarme non arrivato"
+        assert chiedi(base, "/decision", {"task_id": attesa[0]["task_id"], "decision": "yes"})["status"] == "dispatched"
+        stato = aspetta(lambda: (lambda s: s if not s["drone_busy"] and s["ultime_missioni"] else None)(
+            chiedi(base, "/status")), 120)
+        assert stato and stato["ultime_missioni"][0]["verdetto"]["esito"] == "FALSO ALLARME", "verdetto diverso"
+        tipi = [a["tipo"] for a in stato["avvisi"]]
+        assert "grok_anomalia" in tipi, f"Grok ha visto un'anomalia all'allarme ma non è stato avvisato: {tipi}"
+        assert "anomalia_confermata" not in tipi, f"avviso di anomalia confermata con FALSO ALLARME: {tipi}"
+        return f"avvisi {tipi}"
+    finally:
+        centrale.chiudi()
 
 
 @caso("No in dashboard: il drone resta a terra; comando manuale: ci va")

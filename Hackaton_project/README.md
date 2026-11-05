@@ -47,7 +47,8 @@ flowchart LR
 **1. Telecamere fisse.** Sono telefoni con l'app IP Webcam, ognuno assegnato a una zona del capannone. Gli indirizzi sono
 in `TELECAMERE` in cima a `centrale.py`. All'avvio la centrale chiede quale zona inquadra ogni telecamera (Invio = la
 stessa dell'ultima volta, salvata in `dashboard/camere.json`). C'è un allarme solo per le cose grandi: la macchia in
-movimento deve coprire almeno il 3% dell'immagine ed essere ancora diversa dalla scena normale mezzo secondo dopo.
+movimento deve coprire almeno il 3% dell'immagine e, mezzo secondo dopo, la cosa deve ancora essere diversa dalla scena
+normale su almeno l'1,5% dell'immagine.
 Dopo un allarme la stessa telecamera tace per 10 secondi.
 
 **2. Decisione dell'operatore.** L'allarme compare nella dashboard con la foto. Se c'è la chiave, Grok lo descrive e ne
@@ -72,6 +73,8 @@ MANUALE.
 
 **5. Dashboard e statistiche.** La dashboard (`dashboard/index.html`) mostra le decisioni in attesa, la pianta con il
 drone dal vivo, la telemetria (batteria, quota, temperatura, posizione) e le foto e il verdetto dell'ultima missione.
+Quando Grok vede un'anomalia compare un avviso in alto a destra: «Grok ha visto un'anomalia» all'allarme, e «ANOMALIA
+CONFERMATA» quando il verdetto dopo le foto del drone è ANOMALY DETECTED. Resta finché non lo chiudi con la ×.
 Ogni evento finisce in `dashboard/logs/events.json`, che Grafana legge (vedi sotto).
 
 ## Sicurezza

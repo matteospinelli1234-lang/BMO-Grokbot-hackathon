@@ -297,12 +297,14 @@ def prepara(volo):
     print("Numero di serie:", volo.leggi("sn?", tentativi=1))
     hardware = volo.leggi("hardware?", lambda r: r in ("RMTT", "TELLO"), tentativi=6)
     print("Hardware:", hardware)
-    if hardware != "RMTT":
-        raise RuntimeError("modulo di espansione non visto: serve il Tello Talent (RMTT)")
+    if hardware == "TELLO" and volo.usa_tof:                # Tello EDU: nessun modulo di espansione, quindi nessun ToF
+        raise RuntimeError("modulo di espansione non visto: serve il Tello Talent (RMTT). Con il Tello EDU aggiungi --senza-tof")
+    if hardware != "RMTT" and volo.usa_tof:
+        raise RuntimeError(f"hardware {hardware}: il ToF richiede il Tello Talent (RMTT)")
     if volo.usa_tof:
         print("ToF frontale:", volo.tof_cm(), "cm")         # sempre 0 mm -> errore: sensore coperto o guasto
     else:
-        print("ToF frontale DISATTIVATO: protegge solo la pianta (SPAZIO = atterra)")
+        print(f"ToF frontale DISATTIVATO ({hardware}): protegge solo la pianta (SPAZIO = atterra)")
     livello = volo.batteria()
     stato = volo.stato()
     print(f"Batteria {livello}% - temperatura {stato.get('templ')}-{stato.get('temph')} C")

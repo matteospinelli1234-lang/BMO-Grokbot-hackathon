@@ -278,6 +278,7 @@ class Centrale:
         self.bloccato = False                               # dopo un'emergenza: niente più voli
         self._mappa_cache = (0.0, None)
         self.telemetria = {}
+        self.avvisi, self.contatore_avvisi = [], itertools.count(1)   # notifiche per la dashboard (anomalie di Grok)
         volo.cartella_foto = self.frames
 
     # --- registro eventi (stesso formato di webhook.py: una riga JSON con time ed event) ---
@@ -292,6 +293,14 @@ class Centrale:
             print(f"[{riga['time'][11:]}] {nome} " + " ".join(f"{k}={v}" for k, v in dati.items()
                                                                if k not in ("photo", "photo_normale")))
         return riga
+
+    # --- notifiche per la dashboard: Grok ha visto un'anomalia (la dashboard le mostra e le tiene finché non le chiudi) ---
+    def avvisa(self, tipo, testo, **dati):
+        with self.lock:
+            avviso = {"id": next(self.contatore_avvisi), "tipo": tipo, "testo": testo, "time": adesso(), **dati}
+            self.avvisi.append(avviso)
+            del self.avvisi[:-30]
+        return avviso
 
     # --- telemetria: dallo stato che il Tello manda da solo (nessun comando in più) ---
     def leggi_telemetria(self):
@@ -418,6 +427,10 @@ class Centrale:
                     target_zone=compito.get("target_zone"), deviation_detected=r["deviation_detected"],
                     anomalia=anomalia, severity=r["severity"], changes_detected="; ".join(r["changes_detected"]),
                     reasoning=r["reasoning"], grok_s=r["grok_s"])
+        if r["deviation_detected"] is True:
+            self.avvisa("grok_anomalia", f"Grok ha visto un'anomalia: {compito.get('camera', '?')} → "
+                        f"{compito.get('target_zone', '?')}. {r['reasoning']}",
+                        task_id=tid, target_zone=compito.get("target_zone"), camera=compito.get("camera"))
 
     # --- decisioni e coda (come webhook.py) ---
     def decisione(self, tid, scelta):
@@ -537,6 +550,10 @@ class Centrale:
                         esito=verdetto["esito"], descrizione=verdetto["descrizione"],
                         confidenza=verdetto["confidenza"], foto_con_anomalia=", ".join(map(str, verdetto.get("foto") or [])),
                         grok_s=verdetto["grok_s"])
+            if verdetto["esito"] == "ANOMALY DETECTED":
+                self.avvisa("anomalia_confermata", f"ANOMALIA CONFERMATA in {zona} ({compito.get('camera', '?')}), "
+                            f"confidenza {round(verdetto['confidenza'] * 100)}%: {verdetto['descrizione']}",
+                            task_id=tid, target_zone=zona, camera=compito.get("camera"))
         with self.lock:
             self.ultime_missioni.insert(0, missione)
             del self.ultime_missioni[10:]
@@ -573,7 +590,8 @@ class Centrale:
                 "posa": [round(v, 2) for v in (self.volo.posa_mappa() or BASE)],
                 "telecamere": [{"id": c["id"], "nome": c["nome"], "zona": c["zona"], "stato": c["stato"]}
                                for c in self.telecamere.values()],
-                "zone": zone_ids(), "ultime_missioni": self.ultime_missioni[:5]}
+                "zone": zone_ids(), "ultime_missioni": self.ultime_missioni[:5],
+                "avvisi": list(reversed(self.avvisi[-10:]))}
 
     def in_attesa(self):
         with self.lock:

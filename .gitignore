@@ -155,4 +155,5 @@ data/
 *.sqlite3
 
 .claude/
-graphify-out/
+.graphify-out/
+.graphifyignore

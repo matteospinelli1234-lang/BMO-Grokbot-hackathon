@@ -45,6 +45,14 @@
   .etichetta { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; margin: 4px 4px 0 0;
                background: #2a313b; }
   .etichetta.rossa { background: #5c1414; } .etichetta.verde { background: #14451c; } .etichetta.gialla { background: #4d3b00; }
+  #avvisi { position: fixed; top: 70px; right: 12px; z-index: 5; width: min(380px, calc(100vw - 24px)); display: grid; gap: 8px; }
+  #avvisi:empty { display: none; }
+  .avvisi-barra { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--tenue);
+                  background: #0b0e11; border: 1px solid var(--bordo); border-radius: 8px; padding: 4px 8px; }
+  .avviso { position: relative; background: #3d2a00; border: 2px solid var(--ambra); border-radius: 8px; padding: 10px 34px 10px 12px;
+            box-shadow: 0 6px 20px #0008; font-size: 14px; }
+  .avviso.confermata { background: #4a0f0f; border-color: #ff5252; }
+  .avviso .chiudi { position: absolute; top: 4px; right: 6px; background: transparent; padding: 2px 8px; font-size: 18px; }
 </style>
 </head>
 <body>
@@ -54,6 +62,7 @@
   <button class="stop" onclick="stop()" title="Atterra dove si trova, svuota la coda">STOP: atterra</button>
   <button class="emergenza" onclick="emergenza()" title="Motori spenti: il drone cade">EMERGENZA</button>
 </header>
+<div id="avvisi"></div>
 <main>
   <section>
     <h2>Decisioni in attesa</h2>
@@ -110,10 +119,30 @@ async function chiedi(url, dati) {
   return r.json();
 }
 
+const chiusi = new Set();                  // avvisi che l'operatore ha chiuso
+const titoloBase = document.title;
+function chiudiAvviso(id) { chiusi.add(id); aggiorna(); }
+function chiudiTutti(ids) { ids.forEach(i => chiusi.add(i)); aggiorna(); }
+function mostraAvvisi(lista) {
+  const visibili = lista.filter(a => !chiusi.has(a.id)).slice(0, 5);
+  disegna("avvisi", JSON.stringify(visibili), () => visibili.length ? `
+    <div class="avvisi-barra"><span>${visibili.length} avviso${visibili.length > 1 ? "i" : ""} da Grok</span>
+      <button class="neutro" onclick="chiudiTutti(${JSON.stringify(visibili.map(a => a.id))})">Chiudi tutti</button></div>` +
+    visibili.map(a => `
+      <div class="avviso ${a.tipo === "anomalia_confermata" ? "confermata" : ""}">
+        <div><b>${a.tipo === "anomalia_confermata" ? "ANOMALIA CONFERMATA" : "Grok ha visto un'anomalia"}</b>
+          <span class="tenue">${esc(a.time.slice(11))}</span></div>
+        <div>${esc(a.testo)}</div>
+        <button class="chiudi" onclick="chiudiAvviso(${a.id})" title="Chiudi">×</button>
+      </div>`).join("") : "");
+  document.title = visibili.length ? `(${visibili.length}) ANOMALIA · ${titoloBase}` : titoloBase;
+}
+
 async function aggiorna() {
   try {
     const s = await chiedi("/status");
     finte = s.finte;
+    mostraAvvisi(s.avvisi || []);
     const drone = s.bloccato ? "<b style='color:#ff6b6b'>BLOCCATO dopo l'emergenza</b>"
       : s.drone_busy ? `<b>In missione: ${esc(s.mission.target_zone)}</b> &middot; ${esc(s.fase)}`
       : "<b>Drone sul pad</b>";

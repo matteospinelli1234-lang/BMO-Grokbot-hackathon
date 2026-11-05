@@ -24,3 +24,14 @@ foto_giro/
 registro_giro.jsonl
 giro_punti.png
 pianta.png
+
+# Foto, registri e dati delle telecamere: non vanno nel repository
+dashboard/frames/*
+!dashboard/frames/.gitkeep
+dashboard/camere.json
+dashboard/registro_volo.jsonl
+foto_giro/
+giro_punti.png
+registro_giro.jsonl
+pianta.png
+chiave_xai.txt
