@@ -1,0 +1,24 @@
+# File che graphify non deve leggere (sintassi come .gitignore)
+
+# Foto delle telecamere e del drone (anche di persone) e snapshot del simulatore
+*.jpg
+*.jpeg
+*.png
+**/frames/
+**/snapshots/
+**/foto_giro/
+
+# Registri dei voli e degli eventi: dati, non codice
+**/logs/
+*.jsonl
+
+# Modello CAD del pad, lockfile, ambienti e cache
+*.step
+uv.lock
+.venv/
+__pycache__/
+graphify-out/
+
+# Configurazione di Claude Code e della skill di graphify
+.claude/
+CLAUDE.md

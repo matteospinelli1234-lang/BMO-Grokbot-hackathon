@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Segreti: la chiave di Grok sta in XAI_API_KEY o in ~/chiave_xai.txt, mai qui
+.env
+chiave_xai.txt
+
+# Centrale e giro di prova: foto (anche di persone), registri e immagini generate, non vanno nel repository
+dashboard/frames/*
+!dashboard/frames/.gitkeep
+dashboard/logs/*
+!dashboard/logs/.gitkeep
+dashboard/camere.json
+dashboard/registro_volo.jsonl
+foto_giro/
+registro_giro.jsonl
+giro_punti.png
+pianta.png
