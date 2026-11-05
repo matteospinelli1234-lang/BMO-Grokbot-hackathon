@@ -102,30 +102,6 @@ alarm, and «ANOMALIA CONFERMATA» (ANOMALY CONFIRMED) when the verdict after th
 until you close it with the × (at most 5 notices visible at once, with «Chiudi tutti» / Close all).
 Every event ends up in `dashboard/logs/events.json`, which Grafana reads (see below).
 
-## Dashboard from a phone
-
-1. Phone and PC on the **same Wi-Fi network** (the cameras' network, not the drone's Wi-Fi).
-2. Start the control center with `--telefono` as well, for example:
-
-```bash
-uv run centrale.py --arm --senza-tof --telefono
-```
-
-3. At startup the control center prints the addresses to open on the phone, for example `http://192.168.5.224:5000`. Type
-   it with `http://` in front; on the phone `localhost` does not work.
-4. The first time Windows asks for permission for Python: allow access.
-
-The whole console works from the phone: decisions, floor plan, telemetry, photos, notices, STOP, and EMERGENCY. The
-Grafana panel at the bottom uses the PC's address on its own, so photos in the tables are visible from the phone too.
-Grafana can also be opened directly: `http://<PC IP>:3000/d/drone-konsol`.
-
-**Warning:** with `--telefono` anyone on that network can open the dashboard and send the drone: there is no password.
-
-**If the page loads forever from the phone:** check that the phone has an address on the same network as the PC
-(in the Wi-Fi settings) and that no VPN or data saver is active. If it still does not work, the PC may be blocking
-incoming connections: this happens on school- or company-managed PCs, and on 5 November it happened on ours. In that case
-start the control center on another PC.
-
 ## Safety
 
 - **Operator command** before every flight (command line or «Manda il drone in»).
@@ -136,8 +112,7 @@ start the control center on another PC.
   control center accepts no more flights until you restart it. Ctrl+C shuts down the control center and lands the drone.
 - **The drone flies at 1.70 m, head height**: nobody in the room along the paths. With `--senza-tof` (forward sensor
   faulty, or a Tello EDU that does not have one) the drone protects itself only with the floor plan.
-- The dashboard responds only on this PC (`127.0.0.1`). With `--telefono` (or `--host 0.0.0.0`) anyone on the network
-  could send the drone.
+- The dashboard responds only on this PC (`127.0.0.1`).
 
 ## Real flight
 
@@ -172,8 +147,6 @@ Remove `--senza-tof` only if the forward sensor works: the ground checks before 
 | `--senza-grok` | no Grok, even if the key is present |
 | `--arm` | real drone: ground checks and confirmation before starting |
 | `--senza-tof` | ignore the forward sensor (faulty, or a Tello EDU that does not have one) |
-| `--telefono` | dashboard openable from a phone on the same network; prints the address to use |
-| `--host 0.0.0.0` | same as `--telefono` |
 | `--porta N` | dashboard port (default 5000) |
 
 ## Other commands
