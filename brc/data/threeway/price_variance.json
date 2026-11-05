@@ -1,0 +1,9 @@
+{
+  "name": "price_variance",
+  "ordered_kg": "2200.000",
+  "shipped_kg": "2200.000",
+  "billed_kg": "2200.000",
+  "contract_eur_per_kg": "1.85",
+  "invoice_eur_per_kg": "2.40",
+  "expect": "price_variance"
+}

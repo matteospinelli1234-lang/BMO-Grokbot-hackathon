@@ -1,0 +1,10 @@
+{
+  "task": "order",
+  "order_id": "ORD1003",
+  "summary": "L'ordine ORD1003 chiede 2200 kg di Riso Carnaroli a 1,85 euro/kg, e il lotto LOT-CAR-17 copre la quantità. La bozza INV1003 però usa il listino 2,40 euro/kg. La differenza è 0,55 euro/kg, cioè 1210,00 euro, sopra la soglia: la bozza non si registra da sola.",
+  "settlement": "credit_note",
+  "amount_eur": "1210.00",
+  "evidence_ids": ["ORD1003", "DES1003", "INV1003", "price-restrictions"],
+  "clause_ids": ["price-restrictions"],
+  "source": "offline-fixture"
+}

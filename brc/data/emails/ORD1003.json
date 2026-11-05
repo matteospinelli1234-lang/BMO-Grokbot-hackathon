@@ -1,0 +1,7 @@
+{
+  "order_id": "ORD1003",
+  "kind": "price",
+  "from": "acquisti@grande-distribuzione-nord.demo",
+  "subject": "Prezzo non conforme su ORD1003",
+  "body": "Buongiorno,\n\nl'ordine ORD1003 conferma 2200 kg di Riso Carnaroli a 1,85 euro/kg, prezzo del contratto CTR-GDN-2026. La fattura INV1003 applica 2,40 euro/kg, cioè il listino.\n\nIl listino non vale per i nostri ordini. Chiediamo nota di credito sulla differenza.\n\nUfficio acquisti\nGrande Distribuzione Nord"
+}

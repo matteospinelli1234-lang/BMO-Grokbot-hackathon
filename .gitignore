@@ -151,5 +151,7 @@ Thumbs.db
 logs/
 *.log
 data/
+!brc/data/
+!brc/data/**
 *.sqlite
 *.sqlite3

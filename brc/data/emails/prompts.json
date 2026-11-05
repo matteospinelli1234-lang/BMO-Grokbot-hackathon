@@ -1,0 +1,17 @@
+{
+  "model_hint": "Ask Grok for a short Italian email from the retail buyer. Do not invent prices or kilos: use only the numbers in the prompt.",
+  "prompts": [
+    {
+      "file": "ORD1002.json",
+      "prompt": "Scrivi l'email di Grande Distribuzione Nord a Riso Scotti. Oggetto e corpo. Ordine ORD1002, Arborio, ordinati 2000 kg, arrivati 500 kg con bolla DES1002, lotto LOT-ARB-09. Chiedono il saldo. Tono da ufficio acquisti, 90 parole al massimo. Non citare prezzi."
+    },
+    {
+      "file": "ORD1003.json",
+      "prompt": "Email di contestazione prezzo. Ordine ORD1003, Carnaroli, 2200 kg, contratto CTR-GDN-2026 a 1,85 euro/kg, fattura INV1003 a 2,40 euro/kg. Chiedono l'allineamento al contratto. Massimo 90 parole."
+    },
+    {
+      "file": "ORD1004.json",
+      "prompt": "Email di contestazione merce. Ordine ORD1004, Riso Roma 300 kg, lotto LOT-ROM-441, chicco rotto e gessato. Citano la bolla DES1004. Chiedono ritiro o nota di credito. Massimo 90 parole."
+    }
+  ]
+}

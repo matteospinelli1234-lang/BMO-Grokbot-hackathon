@@ -1,0 +1,9 @@
+{
+  "name": "quantity_variance",
+  "ordered_kg": "2000.000",
+  "shipped_kg": "500.000",
+  "billed_kg": "500.000",
+  "contract_eur_per_kg": "1.60",
+  "invoice_eur_per_kg": "1.60",
+  "expect": "short_delivery"
+}

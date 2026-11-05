@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>B.R.C. — back office</title>
+  <style>
+    :root {
+      --paper: #f4efe4;
+      --ink: #1c1915;
+      --muted: #5e564c;
+      --line: #ddcfb8;
+      --green: #1b4332;
+      --green-soft: #e4f0e8;
+      --gold: #8d5a12;
+      --clay: #8f3d32;
+      --card: #fffaf2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 400px at 10% -10%, #efe2c4 0%, transparent 55%),
+        var(--paper);
+      font: 16px/1.45 "Avenir Next", "Segoe UI", sans-serif;
+    }
+    header, main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    .banner {
+      background: var(--green);
+      color: #f6f1e6;
+      text-align: center;
+      padding: 8px 16px;
+      font-size: 14px;
+      letter-spacing: 0.01em;
+    }
+    header { padding: 28px 0 8px; display: flex; justify-content: space-between; gap: 24px; align-items: end; }
+    h1 { font-family: Palatino, "Palatino Linotype", Georgia, serif; font-weight: 500; font-size: 40px; margin: 0; letter-spacing: -0.03em; }
+    h1 span { color: var(--gold); }
+    .lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+    .who { text-align: right; font-size: 14px; color: var(--muted); }
+    .counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+    .pill, .chip {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .pill strong { font-variant-numeric: tabular-nums; }
+    .arch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+    .arch article { background: var(--card); border: 1px solid var(--line); padding: 12px; border-radius: 12px; }
+    .arch b { display: block; font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.04em; color: var(--green); }
+    .layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+    .queue, .dossier, .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+    .queue { padding: 8px; }
+    .case-btn {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      padding: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    .case-btn[aria-current="true"] { background: var(--green-soft); }
+    .case-btn small { display: block; color: var(--muted); }
+    .dossier { padding: 20px; }
+    h2 { font-family: Palatino, Georgia, serif; font-weight: 500; margin: 0 0 8px; font-size: 28px; }
+    .status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 13px; }
+    .pending { background: #f8e7c9; color: #6a4208; }
+    .posted, .approved { background: var(--green-soft); color: var(--green); }
+    .rejected { background: #f8e4e1; color: var(--clay); }
+    .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+    .step { font-size: 12px; letter-spacing: 0.03em; padding: 4px 8px; border-radius: 999px; background: #efe7d8; }
+    .step.on { background: var(--green); color: white; }
+    .step.bad { background: var(--clay); color: white; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .split { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }
+    .proposal { background: #f7f3ea; border-radius: 12px; padding: 12px 14px; }
+    .proposal p { margin: 8px 0; }
+    label { font-size: 13px; color: var(--muted); display: block; margin-top: 8px; }
+    input, textarea {
+      width: 100%;
+      font: inherit;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: white;
+    }
+    .actions { display: flex; gap: 8px; margin-top: 10px; }
+    button.act {
+      font: inherit;
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+      border: 1px solid var(--green);
+      background: var(--green);
+      color: white;
+    }
+    button.ghost { background: transparent; color: var(--clay); border-color: var(--clay); }
+    button.linkish { background: transparent; border: 0; color: var(--green); cursor: pointer; font: inherit; text-decoration: underline; }
+    pre {
+      white-space: pre-wrap;
+      font-size: 12px;
+      background: #221e1a;
+      color: #f3eadc;
+      padding: 12px;
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 220px;
+    }
+    .below { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; margin: 16px 0 28px; }
+    .panel { padding: 16px; }
+    .panel h3 { margin: 0 0 8px; font-family: Palatino, Georgia, serif; font-weight: 500; }
+    .err { color: var(--clay); min-height: 1.2em; }
+    @media (max-width: 900px) {
+      header, .layout, .split, .below, .arch { display: block; }
+      .who { text-align: left; margin-top: 12px; }
+      .arch article, .queue, .panel { margin-bottom: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">Documento dimostrativo, non fiscale. Dati sintetici: niente ERP, niente clienti reali.</div>
+  <header>
+    <div>
+      <h1>B.R.C. <span>back office</span></h1>
+      <p class="lede" id="lede"></p>
+    </div>
+    <div class="who" id="who"></div>
+  </header>
+  <main>
+    <div class="counts" id="counts"></div>
+    <section class="arch" id="arch"></section>
+    <div class="layout">
+      <aside class="queue" id="queue"></aside>
+      <section class="dossier" id="dossier"></section>
+    </div>
+    <div class="below">
+      <section class="panel" id="plan"></section>
+      <section class="panel" id="grain"></section>
+    </div>
+    <section class="panel" id="audit" style="margin-bottom: 32px"></section>
+  </main>
+  <script>
+    const KIND = { clean: "In regola", short: "Consegna parziale", price: "Prezzo", quality: "Qualità" };
+    const STATUS = { posted: "Registrato", pending: "Da confermare", approved: "Confermato", rejected: "Rifiutato" };
+    let state = null;
+    let selected = null;
+
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    async function load(keep) {
+      const response = await fetch("/api/state");
+      state = await response.json();
+      const still = keep && state.cases.some((item) => item.order_id === selected);
+      if (!still) {
+        const open = state.cases.find((item) => item.decision.status === "pending");
+        selected = (open || state.cases[0]).order_id;
+      }
+      render();
+    }
+
+    function render() {
+      document.getElementById("lede").textContent =
+        "Soglia " + state.threshold_eur + " euro. Sotto soglia e dentro tolleranza la pratica si registra da sola. Sopra, o se la merce è contestata, decide una persona.";
+      document.getElementById("who").innerHTML =
+        esc(state.supplier.name) + "<br>" + esc(state.buyer.name) + "<br>Contratto " + esc(state.contract_id);
+      const counts = state.counts;
+      const kinds = Object.entries(counts.by_kind).map(([kind, n]) => KIND[kind] + " " + n).join(" · ") || "nessuna";
+      document.getElementById("counts").innerHTML = [
+        ["In coda", counts.pending],
+        ["Registrati da soli", counts.posted],
+        ["Confermati", counts.approved],
+        ["Rifiutati", counts.rejected]
+      ].map(([label, n]) => `<span class="pill">${esc(label)} <strong>${n}</strong></span>`).join("")
+        + `<span class="pill">Eccezioni aperte: ${esc(kinds)}</span>`;
+      document.getElementById("arch").innerHTML = state.architecture.map((step) =>
+        `<article><b>${esc(step.step)}</b>${esc(step.meaning)}</article>`).join("");
+      document.getElementById("queue").innerHTML = state.cases.map((item) => `
+        <button class="case-btn" data-id="${esc(item.order_id)}" aria-current="${item.order_id === selected}">
+          <strong>${esc(item.order_id)}</strong> · ${esc(KIND[item.kind])}
+          <small>${esc(item.title)}</small>
+          <small><span class="status ${esc(item.decision.status)}">${esc(STATUS[item.decision.status])}</span>
+            ${esc(item.gate.amount_eur)} €</small>
+        </button>`).join("");
+      document.getElementById("queue").querySelectorAll(".case-btn").forEach((button) => {
+        button.addEventListener("click", () => { selected = button.dataset.id; render(); });
+      });
+      renderCase(state.cases.find((item) => item.order_id === selected));
+      renderPlan();
+      renderAudit();
+    }
+
+    function renderCase(item) {
+      const kinds = new Set(item.events.map((event) => event.kind));
+      const qcBad = item.events.some((event) => event.kind === "QC_RESULT" && event.detail.includes("negativo"));
+      const steps = [
+        ["MILLED", kinds.has("MILLED")],
+        ["QC_RESULT", kinds.has("QC_RESULT")],
+        ["PACKED", kinds.has("PACKED")],
+        ["GOODS_ISSUED", kinds.has("GOODS_ISSUED")],
+        ["DESADV", true],
+        ["INVOIC", true],
+        ["GATE", true]
+      ];
+      const line = item.match.lines[0];
+      const proposal = item.dispute_clerk || item.order_clerk;
+      const pending = item.decision.status === "pending";
+      document.getElementById("dossier").innerHTML = `
+        <h2>${esc(item.title)}</h2>
+        <span class="status ${esc(item.decision.status)}">${esc(STATUS[item.decision.status])}</span>
+        <div class="steps">${steps.map(([name, on]) =>
+          `<span class="step ${on ? "on" : ""} ${name === "QC_RESULT" && qcBad ? "bad" : ""}">${esc(name)}</span>`).join("")}</div>
+        <p>${item.gate.reasons.map(esc).join(" ")}</p>
+        <div class="split">
+          <div>
+            <table>
+              <thead><tr><th>Voce</th><th>Kg</th><th>€/kg</th></tr></thead>
+              <tbody>
+                <tr><td>Ordine ${esc(item.order.id)}</td><td>${esc(line.ordered_kg)}</td><td>${esc(line.contract_eur_per_kg)}</td></tr>
+                <tr><td>Bolla ${esc(item.shipment.id)} · ${esc(item.shipment.lot)}</td><td>${esc(line.shipped_kg)}</td><td></td></tr>
+                <tr><td>Fattura ${esc(item.invoice.id)} · ${esc(item.invoice.status)}</td><td>${esc(line.billed_kg)}</td><td>${esc(line.invoice_eur_per_kg)}</td></tr>
+              </tbody>
+            </table>
+            <p>Imponibile fattura ${esc(item.invoice.imponibile)} € · scostamento ${esc(item.match.exposure_eur)} € · backorder ${esc(item.backorder_kg)} kg · esito ${esc(item.match.status)}</p>
+            <h3>Dal mulino all'amministrazione</h3>
+            <ul>${item.events.map((event) => `<li><strong>${esc(event.id)}</strong> ${esc(event.kind)} · ${esc(event.qty_kg)} kg · ${esc(event.detail)}</li>`).join("")}</ul>
+          </div>
+          <div class="proposal">
+            <strong>${item.dispute ? "Proposta sulla contestazione" : "Lettura dell'ordine"}</strong>
+            <span class="chip">${esc(proposal.source)}</span>
+            <p>${esc(proposal.summary)}</p>
+            <p>Chiusura proposta: <strong>${esc(proposal.settlement)}</strong> · ${esc(proposal.amount_eur)} €</p>
+            <p>Prove: ${proposal.evidence_ids.map((id) => `<span class="chip">${esc(id)}</span>`).join(" ")}</p>
+            ${item.dispute ? `<h3>${esc(item.dispute.subject)}</h3><pre>${esc(item.dispute.body)}</pre>` : ""}
+            <p class="err" id="err"></p>
+            ${pending ? `
+              <label for="actor">Chi decide</label>
+              <input id="actor" value="Marta Riva" />
+              <label for="note">Nota, se rifiuti</label>
+              <textarea id="note" rows="2"></textarea>
+              <div class="actions">
+                <button class="act" id="approve" type="button">Conferma la proposta</button>
+                <button class="act ghost" id="reject" type="button">Rifiuta</button>
+              </div>` : `<p>${esc(item.decision.actor || "")} · ${esc(item.decision.note)}</p>
+              <p>Prima ${esc(item.decision.amount_before)} € · dopo ${esc(item.decision.amount_after)} €</p>`}
+          </div>
+        </div>
+        ${item.credit_note ? `<h3>Nota di credito ${esc(item.credit_note.id)} · ${esc(item.credit_note.imponibile)} €</h3><pre>${esc(item.credit_note.xml)}</pre>` : ""}
+        <p><button class="linkish" id="toggle-docs" type="button">Mostra EDI e XML</button></p>
+        <div id="docs" hidden>
+          <h3>ORDERS</h3><pre>${esc(item.order.raw_edi)}</pre>
+          <h3>DESADV</h3><pre>${esc(item.shipment.raw_edi)}</pre>
+          <h3>INVOIC / FatturaPA</h3><pre>${esc(item.invoice.raw_edi)}</pre><pre>${esc(item.invoice.xml)}</pre>
+        </div>`;
+      const toggle = document.getElementById("toggle-docs");
+      toggle.addEventListener("click", () => {
+        const docs = document.getElementById("docs");
+        docs.hidden = !docs.hidden;
+        toggle.textContent = docs.hidden ? "Mostra EDI e XML" : "Nascondi EDI e XML";
+      });
+      if (pending) {
+        document.getElementById("approve").addEventListener("click", () => act("approve"));
+        document.getElementById("reject").addEventListener("click", () => act("reject"));
+      }
+    }
+
+    async function act(kind) {
+      const actor = document.getElementById("actor").value;
+      const note = document.getElementById("note").value;
+      const response = await fetch(`/api/cases/${selected}/${kind}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor, note })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        document.getElementById("err").textContent = payload.detail || "Non eseguito";
+        return;
+      }
+      state = payload;
+      render();
+    }
+
+    function renderPlan() {
+      const rows = state.planning.map((row) =>
+        `<tr><td>${esc(row.name)}</td><td>${esc(row.average_kg)}</td><td>${esc(row.suggested_kg)}</td></tr>`).join("");
+      document.getElementById("plan").innerHTML = `
+        <h3>Bozza di macinazione</h3>
+        <p>Euristica sulle ultime quattro settimane sintetiche, non un piano di produzione.</p>
+        <table><thead><tr><th>Riso</th><th>Media kg</th><th>Proposta kg</th></tr></thead><tbody>${rows}</tbody></table>`;
+      document.getElementById("grain").innerHTML = `
+        <h3>Chicco in immagine</h3>
+        <p>GrainSet (Fan et al.) è in licenza CC BY-NC-SA 4.0: uso non commerciale, attribuzione, share-alike. Il pacchetto del riso pesa circa 3 GB e non è in questo repository. Il controllo del lotto, in questa demo, è l'evento QC_RESULT.</p>
+        <p><button class="linkish" id="reset" type="button">Ricomincia la giornata</button></p>`;
+      document.getElementById("reset").addEventListener("click", async () => {
+        state = await (await fetch("/api/reset", { method: "POST" })).json();
+        selected = null;
+        const open = state.cases.find((item) => item.decision.status === "pending");
+        selected = (open || state.cases[0]).order_id;
+        render();
+      });
+    }
+
+    function renderAudit() {
+      const rows = state.audit.map((entry) =>
+        `<tr><td>${esc(entry.at)}</td><td>${esc(entry.actor)}</td><td>${esc(entry.action)} ${esc(entry.order_id)}</td><td>${esc(entry.amount_before)} → ${esc(entry.amount_after)}</td><td>${esc(entry.evidence_ids.join(", "))}</td></tr>`).join("");
+      document.getElementById("audit").innerHTML = `
+        <h3>Registro</h3>
+        <table><thead><tr><th>Quando</th><th>Chi</th><th>Atto</th><th>Importi</th><th>Prove</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    load(false);
+  </script>
+</body>
+</html>
