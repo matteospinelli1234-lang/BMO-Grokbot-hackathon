@@ -250,5 +250,3 @@ the drone's nose at 180 degrees (west). Angles are counterclockwise from +x.
   lands: rotations and altitude changes are remeasured from the state, a segment counts as done if the drone has moved,
   and the battery is read from the state if `battery?` does not reply.
 - **Privacy:** photos may show people at the workplace.
-
-Details, measurements, and version history: [HANDOFF_GROK.md](HANDOFF_GROK.md).
