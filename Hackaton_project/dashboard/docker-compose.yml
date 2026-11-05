@@ -1,0 +1,28 @@
+# Statistiche della centrale: Alloy legge logs/*.json (scritto da centrale.py) e lo manda a Loki; Grafana lo mostra.
+# Dalla cartella dashboard:  docker compose up -d   ->  http://localhost:3000/d/drone-konsol
+# Sorgente Loki e dashboard si caricano da sole (grafana/provisioning). Stessa struttura del team (bmo-grokbot-hackathon/log).
+services:
+  loki:
+    image: grafana/loki:latest
+    ports: ["3100:3100"]
+  alloy:
+    image: grafana/alloy:latest
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy
+      - ./logs:/logs
+    command: run /etc/alloy/config.alloy
+    depends_on: [loki]
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    environment:
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
+    depends_on: [loki]
+volumes:
+  grafana-data:

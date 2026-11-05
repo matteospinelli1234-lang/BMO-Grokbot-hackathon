@@ -1,0 +1,21 @@
+local.file_match "drone" {
+  path_targets = [{"__path__" = "/logs/*.json", "job" = "drone"}]
+}
+loki.source.file "drone" {
+  targets    = local.file_match.drone.targets
+  forward_to = [loki.process.json.receiver]
+}
+loki.process "json" {
+  stage.json {
+    expressions = { event = "event" }
+  }
+  stage.labels {
+    values = { event = "" }
+  }
+  forward_to = [loki.write.default.receiver]
+}
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

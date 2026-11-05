@@ -1,0 +1,12 @@
+{
+  "cam1": {
+    "zona": "NORTH_OPEN",
+    "url": "http://192.168.5.133:8080/video",
+    "ruota": 0
+  },
+  "cam2": {
+    "zona": "ZONE_7",
+    "url": "http://192.168.5.148:8080/video",
+    "ruota": 0
+  }
+}

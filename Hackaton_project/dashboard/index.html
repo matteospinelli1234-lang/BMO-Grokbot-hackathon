@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Centrale drone</title>
+<style>
+  :root {
+    --sfondo: #101317; --carta: #1a1f26; --bordo: #2a313b; --testo: #e7eaee; --tenue: #9aa4b1;
+    --verde: #2e7d32; --rosso: #c62828; --ambra: #b26a00; --blu: #1e5aa8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--sfondo);
+         color: var(--testo); font-size: 15px; }
+  header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+           padding: 12px 16px; background: #0b0e11; border-bottom: 1px solid var(--bordo); }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  #stato { flex: 1; min-width: 240px; color: var(--tenue); }
+  #stato b { color: var(--testo); }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; padding: 14px 16px; }
+  section { background: var(--carta); border: 1px solid var(--bordo); border-radius: 8px; padding: 12px; min-width: 0; }
+  section h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--tenue); margin: 0 0 10px; }
+  .largo { grid-column: 1 / -1; }
+  button, select { font: inherit; padding: 8px 14px; border: 0; border-radius: 6px; cursor: pointer; color: #fff; }
+  select { background: #2a313b; }
+  .si { background: var(--verde); } .no { background: var(--rosso); } .neutro { background: var(--blu); }
+  .stop { background: var(--ambra); font-weight: 700; } .emergenza { background: var(--rosso); font-weight: 700; }
+  img { max-width: 100%; display: block; border-radius: 4px; }
+  .carta { border: 1px solid var(--bordo); border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+  .riga { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  .foto { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .foto figure { margin: 0; } .foto figcaption { font-size: 12px; color: var(--tenue); }
+  .camere { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+  .verdetto { font-size: 20px; font-weight: 800; padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .ANOMALY { background: #5c1414; } .FALSO { background: #14451c; } .VERIFICA { background: #4d3b00; }
+  .tenue { color: var(--tenue); font-size: 13px; }
+  #eventi { font-family: ui-monospace, Consolas, monospace; font-size: 12px; max-height: 320px; overflow: auto;
+            white-space: pre-wrap; overflow-wrap: anywhere; }
+  iframe { width: 100%; height: 640px; border: 0; border-radius: 6px; background: #000; }
+  details summary { cursor: pointer; color: var(--tenue); }
+  .valori { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  .valore { background: #12161b; border: 1px solid var(--bordo); border-radius: 6px; padding: 8px; }
+  .valore span { display: block; font-size: 12px; color: var(--tenue); }
+  .valore b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .etichetta { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; margin: 4px 4px 0 0;
+               background: #2a313b; }
+  .etichetta.rossa { background: #5c1414; } .etichetta.verde { background: #14451c; } .etichetta.gialla { background: #4d3b00; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Centrale drone</h1>
+  <div id="stato">Connessione...</div>
+  <button class="stop" onclick="stop()" title="Atterra dove si trova, svuota la coda">STOP: atterra</button>
+  <button class="emergenza" onclick="emergenza()" title="Motori spenti: il drone cade">EMERGENZA</button>
+</header>
+<main>
+  <section>
+    <h2>Decisioni in attesa</h2>
+    <div id="pending">...</div>
+  </section>
+  <section>
+    <h2>Mappa</h2>
+    <img id="mappa" src="/mappa.png" alt="Pianta con zone, telecamere e drone">
+    <div class="riga">
+      <span>Manda il drone in</span>
+      <select id="zona"></select>
+      <button class="neutro" onclick="vai()">Vai</button>
+    </div>
+  </section>
+  <section>
+    <h2>Telemetria del drone</h2>
+    <div id="telemetria" class="valori"></div>
+  </section>
+  <section>
+    <h2>Ultima missione</h2>
+    <div id="missione" class="tenue">Nessuna missione.</div>
+  </section>
+  <section class="largo">
+    <h2>Telecamere fisse</h2>
+    <div id="camere" class="camere"></div>
+  </section>
+  <section class="largo">
+    <h2>Eventi</h2>
+    <div id="eventi"></div>
+  </section>
+  <section class="largo">
+    <details>
+      <summary>Grafana (statistiche: serve <code>docker compose up -d</code> nella cartella dashboard)</summary>
+      <iframe id="grafana" loading="lazy" data-src="http://localhost:3000/d/drone-konsol?kiosk&refresh=5s"></iframe>
+    </details>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let finte = false, zoneCaricate = false;
+const ultimo = {};                       // ridisegna una sezione solo se il contenuto cambia: i clic non si perdono
+function disegna(id, chiave, html) {
+  if (ultimo[id] === chiave) return false;
+  ultimo[id] = chiave;
+  $(id).innerHTML = html();
+  return true;
+}
+
+async function chiedi(url, dati) {
+  const opzioni = dati === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"},
+                                             body: JSON.stringify(dati)};
+  const r = await fetch(url, opzioni);
+  return r.json();
+}
+
+async function aggiorna() {
+  try {
+    const s = await chiedi("/status");
+    finte = s.finte;
+    const drone = s.bloccato ? "<b style='color:#ff6b6b'>BLOCCATO dopo l'emergenza</b>"
+      : s.drone_busy ? `<b>In missione: ${esc(s.mission.target_zone)}</b> &middot; ${esc(s.fase)}`
+      : "<b>Drone sul pad</b>";
+    $("stato").innerHTML = `${drone} &middot; batteria ${s.batteria ?? "?"}% &middot; coda ${s.queue.length}` +
+      ` &middot; in attesa ${s.pending}`;
+    const t = s.telemetria || {}, num = (v, u = "") => v === null || v === undefined ? "–" : `${v}${u}`;
+    $("telemetria").innerHTML = [
+      ["Fase", esc(t.fase || s.fase)], ["In volo", t.in_volo ? "sì" : "no"], ["Batteria", num(t.batteria, " %")],
+      ["Quota", num(t.quota_cm, " cm")], ["Temperatura", num(t.temperatura, " °C")],
+      ["Posizione", t.x_m === undefined ? "–" : `${t.x_m}; ${t.y_m} m`], ["Direzione", num(t.direzione, "°")],
+      ["Velocità", num(t.velocita_cm_s, " cm/s")]
+    ].map(([n, v]) => `<div class="valore"><span>${n}</span><b>${v}</b></div>`).join("");
+    if (!zoneCaricate) {
+      $("zona").innerHTML = s.zone.map(z => `<option>${esc(z)}</option>`).join("");
+      zoneCaricate = true;
+    }
+    disegna("camere", JSON.stringify([s.telecamere, finte]), () => s.telecamere.map(c => `
+      <div class="carta">
+        <b>${esc(c.nome)}</b> &rarr; ${esc(c.zona)} <span class="tenue">(${esc(c.stato)})</span>
+        ${finte ? `<div class="riga"><button class="neutro" onclick="simula('${esc(c.id)}')">Simula evento</button></div>` : ""}
+        <img class="dal-vivo" data-id="${esc(c.id)}" alt="${esc(c.nome)}" onerror="this.style.visibility='hidden'"
+             onload="this.style.visibility='visible'">
+      </div>`).join(""));
+    document.querySelectorAll("img.dal-vivo").forEach(img => {
+      img.src = `/camera/${encodeURIComponent(img.dataset.id)}.jpg?t=${Date.now()}`;
+    });
+    const m = s.ultime_missioni[0];
+    if (m) {
+      const v = m.verdetto;
+      disegna("missione", JSON.stringify(m), () => `
+        <div><b>${esc(m.target_zone)}</b> &middot; ${esc(m.camera || "")} &middot; <span class="tenue">${esc(m.time)}</span></div>
+        <div>
+          <span class="etichetta">${m.raggiunta ? "zona raggiunta" : "zona NON raggiunta"}</span>
+          <span class="etichetta">${esc(m.durata_s ?? "?")} s di volo</span>
+          <span class="etichetta">batteria ${esc(m.batteria_inizio ?? "?")}% → ${esc(m.batteria_fine ?? "?")}%</span>
+          <span class="etichetta ${m.pad_visto ? "verde" : "gialla"}">${m.pad_visto ? "atterrato sul pad" :
+            m.pad_visto === false ? "pad non visto" : "pad non cercato"}</span>
+        </div>
+        ${v ? `<div class="verdetto ${esc(v.esito.split(" ")[0])}" style="margin-top:8px">${esc(v.esito)}</div>
+               <div class="tenue">Grok: confidenza ${Math.round((v.confidenza || 0) * 100)}%` +
+               `${v.foto && v.foto.length ? ` &middot; si vede verso ${esc(v.foto.join(", "))}` : ""}` +
+               `${v.grok_s !== undefined ? ` &middot; risposta in ${esc(v.grok_s)} s` : ""}</div>
+               <div>${esc(v.descrizione)}</div>`
+            : `<div class="tenue">${m.raggiunta ? "Nessun verdetto di Grok." : "Zona non raggiunta."}</div>`}
+        <div class="foto" style="margin-top:8px">${m.foto.map(f => `
+          <figure><a href="/frames/${encodeURIComponent(f.photo)}" target="_blank">
+            <img src="/frames/${encodeURIComponent(f.photo)}" alt="${esc(f.lato)}"></a>
+            <figcaption>${esc(f.lato)} &middot; luce ${esc(f.luce ?? "?")}/255${f.luce < 60 ? " (buia)" : ""}</figcaption>
+          </figure>`).join("")}</div>`);
+    }
+    const p = await chiedi("/pending");
+    disegna("pending", JSON.stringify(p), () => p.length ? p.map(t => `
+      <div class="carta">
+        <b>${esc(t.camera)} &rarr; ${esc(t.target_zone)}</b> <span class="tenue">${esc(t.time.slice(11))}</span>
+        <div>
+          <span class="etichetta">${esc(t.area_percento ?? "?")}% dell'immagine</span>
+          <span class="etichetta">priorità ${t.priority}</span>
+          ${t.grok_deviation === true ? `<span class="etichetta rossa">Grok: anomalia</span>` :
+            t.grok_deviation === false ? `<span class="etichetta verde">Grok: niente di anomalo</span>` :
+            `<span class="etichetta">Grok: in attesa</span>`}
+          ${t.grok_deviation !== null && t.grok_deviation !== undefined ?
+            `<span class="etichetta ${t.severity === "high" ? "rossa" : t.severity === "low" ? "verde" : "gialla"}">gravità ${esc(t.severity)}</span>
+             <span class="etichetta">${esc(t.grok_s ?? "?")} s</span>` : ""}
+        </div>
+        <div>${esc((t.changes_detected || []).join("; "))}</div>
+        <div class="tenue">${esc(t.reasoning)}</div>
+        ${t.photo ? `<img src="/frames/${encodeURIComponent(t.photo)}" alt="allarme">` : ""}
+        <div class="riga">
+          <button class="si" onclick="decidi('${esc(t.task_id)}','yes')">Sì, manda il drone</button>
+          <button class="no" onclick="decidi('${esc(t.task_id)}','no')">No</button>
+        </div>
+      </div>`).join("") : "<span class='tenue'>Nessuna decisione in attesa.</span>");
+    const e = await chiedi("/eventi");
+    $("eventi").textContent = e.map(r => {
+      const {time, event, ...resto} = r;
+      return `${time.slice(11)}  ${event}  ${JSON.stringify(resto)}`;
+    }).join("\n");
+  } catch (err) {
+    $("stato").textContent = "Centrale non raggiungibile: è avviata? (" + err + ")";
+  }
+}
+
+setInterval(() => { $("mappa").src = "/mappa.png?t=" + Date.now(); }, 1500);
+async function decidi(id, scelta) { await chiedi("/decision", {task_id: id, decision: scelta}); aggiorna(); }
+async function vai() { await chiedi("/command", {target_zone: $("zona").value}); aggiorna(); }
+async function simula(id) { await chiedi("/simula", {camera_id: id}); }
+async function stop() { await chiedi("/stop", {}); aggiorna(); }
+async function emergenza() {
+  if (confirm("EMERGENZA: i motori si spengono e il drone cade. Continuare?")) { await chiedi("/emergenza", {}); aggiorna(); }
+}
+document.querySelector("details").addEventListener("toggle", ev => {
+  const f = $("grafana");
+  if (ev.target.open && !f.src) f.src = f.dataset.src;
+});
+setInterval(aggiorna, 1500);
+aggiorna();
+</script>
+</body>
+</html>

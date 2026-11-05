@@ -1,0 +1,12 @@
+[project]
+name = "drone-grok-pad2"
+version = "0.1.0"
+description = "Missione di verifica con il Tello Talent guidata da Grok sulla pianta PAD2.step"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "djitellopy>=2.5.0",
+    "numpy>=2.5.4",
+    "openai>=3.45.0",
+    "opencv-python>=4.10,<5",
+]

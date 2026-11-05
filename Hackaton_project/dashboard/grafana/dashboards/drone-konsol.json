@@ -1,0 +1,1080 @@
+{
+ "title": "Centrale drone",
+ "uid": "drone-konsol",
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "refresh": "5s",
+ "schemaVersion": 39,
+ "timezone": "browser",
+ "panels": [
+  {
+   "type": "stat",
+   "title": "Allarmi delle telecamere",
+   "description": "cose grandi viste dalle telecamere fisse",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"camera_input\"} [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    },
+    "overrides": []
+   },
+   "id": 1
+  },
+  {
+   "type": "stat",
+   "title": "Decisioni: Sì",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"final_decision\"} | json decision | decision=\"yes\" [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     }
+    },
+    "overrides": []
+   },
+   "id": 2
+  },
+  {
+   "type": "stat",
+   "title": "Decisioni: No",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"final_decision\"} | json decision | decision=\"no\" [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "orange"
+     }
+    },
+    "overrides": []
+   },
+   "id": 3
+  },
+  {
+   "type": "stat",
+   "title": "Missioni completate",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"mission_completed\"} [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    },
+    "overrides": []
+   },
+   "id": 4
+  },
+  {
+   "type": "stat",
+   "title": "ANOMALY DETECTED",
+   "description": "Grok: le foto del drone confermano ciò che ha visto la telecamera",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"verdict\"} | json esito | esito=\"ANOMALY DETECTED\" [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "red"
+     }
+    },
+    "overrides": []
+   },
+   "id": 5
+  },
+  {
+   "type": "stat",
+   "title": "FALSO ALLARME",
+   "description": "Grok: le foto del drone non confermano l'allarme",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"verdict\"} | json esito | esito=\"FALSO ALLARME\" [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     }
+    },
+    "overrides": []
+   },
+   "id": 6
+  },
+  {
+   "type": "stat",
+   "title": "Decisione dell'operatore (media)",
+   "description": "dall'allarme al Sì/No in dashboard",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"final_decision\"} | json tempo_decisione_s | unwrap tempo_decisione_s | __error__=\"\" [$__range]))"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "noValue": "-",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    },
+    "overrides": []
+   },
+   "id": 7
+  },
+  {
+   "type": "stat",
+   "title": "Risposta di Grok (media)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 4,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "avg(avg_over_time({job=\"drone\", event=~\"grok_analysis|verdict\"} | json grok_s | unwrap grok_s | __error__=\"\" [$__range]))"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "noValue": "-",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    },
+    "overrides": []
+   },
+   "id": 8
+  },
+  {
+   "type": "stat",
+   "title": "Durata missione (media)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 4,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"mission_completed\"} | json durata_s | unwrap durata_s | __error__=\"\" [$__range]))"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "noValue": "-",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    },
+    "overrides": []
+   },
+   "id": 9
+  },
+  {
+   "type": "stat",
+   "title": "Batteria (ultima in volo)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 4,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "max(last_over_time({job=\"drone\", event=\"telemetry\"} | json batteria | unwrap batteria | __error__=\"\" [$__range]))"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "yellow"
+     }
+    },
+    "overrides": []
+   },
+   "id": 10
+  },
+  {
+   "type": "stat",
+   "title": "Luce media delle foto",
+   "description": "0-255: sotto 60 le foto sono buie (serve più luce in sala)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 4,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"drone_photo\"} | json luce | unwrap luce | __error__=\"\" [$__range]))"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "yellow"
+     }
+    },
+    "overrides": []
+   },
+   "id": 11
+  },
+  {
+   "type": "stat",
+   "title": "Errori delle telecamere",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 4,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "queryType": "instant",
+     "expr": "sum(count_over_time({job=\"drone\", event=\"camera_error\"} [$__range])) or vector(0)"
+    }
+   ],
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "noValue": "-",
+     "decimals": null,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "orange"
+     }
+    },
+    "overrides": []
+   },
+   "id": 12
+  },
+  {
+   "type": "timeseries",
+   "title": "Telemetria in volo: batteria e temperatura",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"telemetry\"} | json batteria | unwrap batteria | __error__=\"\" [$__interval]))",
+     "legendFormat": "batteria %"
+    },
+    {
+     "refId": "B",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"telemetry\"} | json temperatura | unwrap temperatura | __error__=\"\" [$__interval]))",
+     "legendFormat": "temperatura °C"
+    }
+   ],
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 10,
+      "pointSize": 6,
+      "showPoints": "always",
+      "spanNulls": 30000,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   },
+   "id": 13
+  },
+  {
+   "type": "timeseries",
+   "title": "Telemetria in volo: quota e velocità",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 8,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"telemetry\"} | json quota_cm | unwrap quota_cm | __error__=\"\" [$__interval]))",
+     "legendFormat": "quota cm"
+    },
+    {
+     "refId": "B",
+     "expr": "avg(avg_over_time({job=\"drone\", event=\"telemetry\"} | json velocita_cm_s | unwrap velocita_cm_s | __error__=\"\" [$__interval]))",
+     "legendFormat": "velocità cm/s"
+    }
+   ],
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 10,
+      "pointSize": 6,
+      "showPoints": "always",
+      "spanNulls": 30000,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   },
+   "id": 14
+  },
+  {
+   "type": "timeseries",
+   "title": "Allarmi per zona",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 8,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (target_zone) (count_over_time({job=\"drone\", event=\"camera_input\"} | json target_zone [$__interval]))",
+     "legendFormat": "{{target_zone}}"
+    }
+   ],
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 60,
+      "pointSize": 6,
+      "showPoints": "always",
+      "spanNulls": 30000,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   },
+   "id": 15
+  },
+  {
+   "type": "logs",
+   "title": "Verdetti di Grok (dopo le 4 foto del drone)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\", event=\"verdict\"} | json | line_format \"{{.esito}} · {{.target_zone}} · {{.camera}} · confidenza {{.confidenza}} · si vede verso: {{.foto_con_anomalia}} · {{.descrizione}}\""
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none",
+    "prettifyLogMessage": false
+   },
+   "id": 16
+  },
+  {
+   "type": "logs",
+   "title": "Analisi di Grok sulle telecamere",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 16,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\", event=\"grok_analysis\"} | json | line_format \"{{.camera}} → {{.target_zone}} · anomalia {{.anomalia}} · gravità {{.severity}} · {{.grok_s}} s · {{.changes_detected}} · {{.reasoning}}\""
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none",
+    "prettifyLogMessage": false
+   },
+   "id": 17
+  },
+  {
+   "type": "logs",
+   "title": "Decisioni dell'operatore",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\", event=\"final_decision\"} | json | line_format \"{{.camera}} → {{.target_zone}}: {{.decision}} dopo {{.tempo_decisione_s}} s (Grok: anomalia {{.grok_anomalia}}, gravità {{.severity}}, priorità {{.priority}})\""
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none",
+    "prettifyLogMessage": false
+   },
+   "id": 18
+  },
+  {
+   "type": "logs",
+   "title": "Missioni del drone",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 25,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\", event=\"mission_completed\"} | json | line_format \"{{.target_zone}} ({{.camera}}): raggiunta {{.reached}}, {{.photos}} foto, {{.durata_s}} s, batteria {{.batteria_inizio}}% → {{.batteria_fine}}%, pad visto {{.pad_visto}}, luce media {{.luce_media}}\""
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none",
+    "prettifyLogMessage": false
+   },
+   "id": 19
+  },
+  {
+   "type": "table",
+   "title": "Foto delle telecamere (allarmi)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 33,
+    "w": 9,
+    "h": 12
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\", event=\"camera_input\"} | json | line_format \"http://localhost:5000/frames/{{.photo}}\""
+    }
+   ],
+   "transformations": [
+    {
+     "id": "extractFields",
+     "options": {
+      "source": "labels",
+      "format": "auto",
+      "replace": false
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "includeByName": {
+       "Time": true,
+       "Line": true,
+       "camera": true,
+       "target_zone": true,
+       "area_percento": true
+      },
+      "renameByName": {
+       "Time": "Ora",
+       "Line": "Foto",
+       "target_zone": "Zona",
+       "camera": "Telecamera",
+       "lato": "Lato",
+       "area_percento": "Area %",
+       "luce": "Luce",
+       "nitidezza": "Nitidezza"
+      },
+      "indexByName": {
+       "Time": 0,
+       "camera": 1,
+       "target_zone": 2,
+       "area_percento": 3,
+       "Line": 4
+      }
+     }
+    }
+   ],
+   "options": {
+    "cellHeight": "lg",
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Ora",
+      "desc": true
+     }
+    ]
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "left"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": "^(Foto|Line)$"
+      },
+      "properties": [
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "image"
+        }
+       },
+       {
+        "id": "custom.width",
+        "value": 170
+       }
+      ]
+     }
+    ]
+   },
+   "id": 20
+  },
+  {
+   "type": "table",
+   "title": "Foto del drone",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 9,
+    "y": 33,
+    "w": 9,
+    "h": 12
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\", event=\"drone_photo\"} | json | line_format \"http://localhost:5000/frames/{{.photo}}\""
+    }
+   ],
+   "transformations": [
+    {
+     "id": "extractFields",
+     "options": {
+      "source": "labels",
+      "format": "auto",
+      "replace": false
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "includeByName": {
+       "Time": true,
+       "Line": true,
+       "target_zone": true,
+       "lato": true,
+       "luce": true,
+       "nitidezza": true
+      },
+      "renameByName": {
+       "Time": "Ora",
+       "Line": "Foto",
+       "target_zone": "Zona",
+       "camera": "Telecamera",
+       "lato": "Lato",
+       "area_percento": "Area %",
+       "luce": "Luce",
+       "nitidezza": "Nitidezza"
+      },
+      "indexByName": {
+       "Time": 0,
+       "target_zone": 1,
+       "lato": 2,
+       "luce": 3,
+       "nitidezza": 4,
+       "Line": 5
+      }
+     }
+    }
+   ],
+   "options": {
+    "cellHeight": "lg",
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Ora",
+      "desc": true
+     }
+    ]
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "left"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": "^(Foto|Line)$"
+      },
+      "properties": [
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "image"
+        }
+       },
+       {
+        "id": "custom.width",
+        "value": 170
+       }
+      ]
+     }
+    ]
+   },
+   "id": 21
+  },
+  {
+   "type": "logs",
+   "title": "Tutti gli eventi",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 33,
+    "w": 6,
+    "h": 12
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{job=\"drone\"} | json | event!=\"telemetry\""
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending"
+   },
+   "id": 22
+  }
+ ],
+ "description": "Telecamere fisse, decisioni dell'operatore, voli, foto e verdetti di Grok (centrale.py)"
+}
